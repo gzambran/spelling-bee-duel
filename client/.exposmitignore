@@ -1,0 +1,17 @@
+# Ignore server files and directories
+../server/
+../scripts/
+../docker-compose.yml
+../.git/
+
+# Ignore common development files
+../README.md
+../DEVELOPMENT_PLAN.md
+../.gitignore
+
+# Node modules outside client directory
+../node_modules/
+
+# Docker files
+../Dockerfile
+../.dockerignore
