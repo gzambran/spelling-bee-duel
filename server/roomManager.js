@@ -6,6 +6,8 @@ class RoomManager {
     this.rooms = new Map(); // roomCode -> game object
     this.playerRooms = new Map(); // playerId -> roomCode
     this.roomTimers = new Map(); // roomCode -> timer objects
+    this.COUNTDOWN_DURATION = 3; // 3 seconds countdown
+    this.ROUND_DURATION = 90; // 90 seconds per round
   }
 
   // Generate a unique 4-digit room code
@@ -193,7 +195,7 @@ class RoomManager {
     };
   }
 
-  // Start a round with automatic timer
+  // Start a round with countdown and server-controlled timer
   startRoundWithTimer(roomCode, io) {
     try {
       const game = this.rooms.get(roomCode);
@@ -201,64 +203,154 @@ class RoomManager {
         throw new Error('Room not found');
       }
 
-      const roundInfo = gameLogic.startRound(game);
+      const nextRound = game.currentRound + 1;
       
-      // Clear any existing round timer
+      console.log(`⏰ Starting countdown for round ${nextRound} in room ${roomCode}`);
+      
+      // Clear any existing timers
       this.clearRoundTimer(roomCode);
 
-      // Set timer to automatically end round
-      const timer = setTimeout(() => {
-        this.endRoundAutomatically(roomCode, io);
-      }, gameLogic.ROUND_DURATION * 1000);
+      // Start countdown
+      io.to(roomCode).emit('countdown-started', {
+        countdown: this.COUNTDOWN_DURATION,
+        nextRound: nextRound
+      });
 
-      // Store timer reference
+      // Start actual round after countdown
+      const countdownTimer = setTimeout(() => {
+        try {
+          const roundInfo = gameLogic.startRound(game);
+          
+          // Emit round started event
+          io.to(roomCode).emit('round-started', {
+            roundInfo,
+            gameState: gameLogic.getGameState(game)
+          });
+
+          // Start server-controlled timer with broadcasts
+          this.startServerTimer(roomCode, io);
+
+        } catch (error) {
+          console.error(`❌ Error starting round after countdown for room ${roomCode}:`, error.message);
+        }
+      }, this.COUNTDOWN_DURATION * 1000);
+
+      // Store countdown timer reference
       if (!this.roomTimers.has(roomCode)) {
         this.roomTimers.set(roomCode, {});
       }
-      this.roomTimers.get(roomCode).roundTimer = timer;
+      this.roomTimers.get(roomCode).countdownTimer = countdownTimer;
 
-      return roundInfo;
+      return {
+        countdown: this.COUNTDOWN_DURATION,
+        nextRound: nextRound
+      };
     } catch (error) {
-      console.error(`❌ Error starting round for room ${roomCode}:`, error.message);
+      console.error(`❌ Error starting countdown for room ${roomCode}:`, error.message);
       throw error;
     }
   }
 
-  // Automatically end a round when timer expires
-  endRoundAutomatically(roomCode, io) {
+  // NEW: Start server-controlled timer with broadcasts
+  startServerTimer(roomCode, io) {
+    const game = this.rooms.get(roomCode);
+    if (!game || game.roundStatus !== 'active') {
+      return;
+    }
+
+    const startTime = Date.now();
+    console.log(`⏱️ Starting server timer for round ${game.currentRound} in room ${roomCode}`);
+
+    // Broadcast timer updates every second for smooth countdown
+    const timerInterval = setInterval(() => {
+      const currentGame = this.rooms.get(roomCode);
+      if (!currentGame || currentGame.roundStatus !== 'active') {
+        clearInterval(timerInterval);
+        return;
+      }
+
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const timeRemaining = Math.max(0, this.ROUND_DURATION - elapsed);
+
+      // Broadcast time update every second
+      io.to(roomCode).emit('timer-update', {
+        timeRemaining,
+        roundActive: timeRemaining > 0
+      });
+
+      // End round when time expires
+      if (timeRemaining <= 0) {
+        clearInterval(timerInterval);
+        this.endRoundByTimer(roomCode, io);
+      }
+    }, 1000); // Update every 1 second for smooth countdown
+
+    // Store timer reference
+    if (!this.roomTimers.has(roomCode)) {
+      this.roomTimers.set(roomCode, {});
+    }
+    this.roomTimers.get(roomCode).timerInterval = timerInterval;
+  }
+
+  // NEW: End round when server timer expires
+  endRoundByTimer(roomCode, io) {
     try {
       const game = this.rooms.get(roomCode);
       if (!game || game.roundStatus !== 'active') {
         return;
       }
 
-      console.log(`⏰ Round ${game.currentRound} time expired for room ${roomCode}`);
+      console.log(`⏰ Server timer expired for round ${game.currentRound} in room ${roomCode} - requesting client results`);
       
-      const roundResult = gameLogic.endRound(game);
-      
-      // Notify all players in the room
-      const roomSockets = io.sockets.adapter.rooms.get(roomCode);
-      if (roomSockets) {
-        io.to(roomCode).emit('round-ended', {
-          roundResult,
-          gameState: gameLogic.getGameState(game)
-        });
-      }
+      // Signal clients that time is up and they should submit results immediately
+      io.to(roomCode).emit('round-time-expired', {
+        message: 'Time expired - submit your results now!'
+      });
 
-      // Clear the timer
-      this.clearRoundTimer(roomCode);
+      // Wait briefly for client submissions, then force end if needed
+      setTimeout(() => {
+        const updatedGame = this.rooms.get(roomCode);
+        if (updatedGame && updatedGame.roundStatus === 'active') {
+          console.log(`⏰ Force ending round ${updatedGame.currentRound} in room ${roomCode} - processing available results`);
+          
+          const roundResult = gameLogic.endRound(updatedGame);
+          
+          // Clear timers
+          this.clearRoundTimer(roomCode);
+          
+          // Send results
+          if (updatedGame.gameStatus === 'finished') {
+            io.to(roomCode).emit('game-finished', {
+              roundResult,
+              gameState: gameLogic.getGameState(updatedGame),
+              finalResults: updatedGame.finalResults
+            });
+          } else {
+            io.to(roomCode).emit('round-ended', {
+              roundResult,
+              gameState: gameLogic.getGameState(updatedGame)
+            });
+          }
+        }
+      }, 2000); // Wait 2 seconds for client submissions
 
     } catch (error) {
-      console.error(`❌ Error auto-ending round for room ${roomCode}:`, error.message);
+      console.error(`❌ Error ending round by timer for room ${roomCode}:`, error.message);
     }
   }
 
   // Clear round timer for a room
   clearRoundTimer(roomCode) {
     const timers = this.roomTimers.get(roomCode);
-    if (timers && timers.roundTimer) {
-      clearTimeout(timers.roundTimer);
-      delete timers.roundTimer;
+    if (timers) {
+      if (timers.timerInterval) {
+        clearInterval(timers.timerInterval);
+        delete timers.timerInterval;
+      }
+      if (timers.countdownTimer) {
+        clearTimeout(timers.countdownTimer);
+        delete timers.countdownTimer;
+      }
     }
   }
 
@@ -345,8 +437,11 @@ class RoomManager {
     console.log('🧹 Cleaning up all room timers...');
     
     for (const [roomCode, timers] of this.roomTimers.entries()) {
-      if (timers.roundTimer) {
-        clearTimeout(timers.roundTimer);
+      if (timers.timerInterval) {
+        clearInterval(timers.timerInterval);
+      }
+      if (timers.countdownTimer) {
+        clearTimeout(timers.countdownTimer);
       }
       if (timers.cleanupTimer) {
         clearTimeout(timers.cleanupTimer);

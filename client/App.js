@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Import screens
 import LobbyScreen from './screens/LobbyScreen';
 import GameScreen from './screens/GameScreen';
 import ResultsScreen from './screens/ResultsScreen';
 import FinalResultsScreen from './screens/FinalResultsScreen';
+import CountdownScreen from './screens/CountdownScreen';
 
 // Import socket service
 import socketService from './services/socketService';
@@ -16,13 +18,19 @@ export default function App() {
   const [gameState, setGameState] = useState(null);
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
-  const [isConnected, setIsConnected] = useState(false);
   const [roundResults, setRoundResults] = useState(null);
   const [finalResults, setFinalResults] = useState(null);
+  
+  // Countdown state
+  const [countdown, setCountdown] = useState(3);
+  const [nextRound, setNextRound] = useState(1);
+
+  // Server timer state
+  const [serverTimeRemaining, setServerTimeRemaining] = useState(90);
 
   // Initialize socket connection on app start
   useEffect(() => {
-    initializeConnection();
+    initializeApp();
     
     // Cleanup on unmount
     return () => {
@@ -30,25 +38,20 @@ export default function App() {
     };
   }, []);
 
-  // Initialize socket connection and set up event listeners
-  const initializeConnection = async () => {
+  // Initialize app and set up socket listeners
+  const initializeApp = async () => {
     try {
       await socketService.connect();
-      setIsConnected(true);
-      setupSocketListeners();
+      setupGameListeners();
     } catch (error) {
-      console.error('Failed to connect to server:', error);
-      Alert.alert(
-        'Connection Error',
-        'Failed to connect to game server. Please check your connection and try again.',
-        [{ text: 'OK', onPress: () => {} }]
-      );
+      console.error('Failed to connect:', error);
+      // Don't show alert on initial connection failure - let actions handle errors
     }
   };
 
-  // Set up socket event listeners
-  const setupSocketListeners = () => {
-    // Player joined/left events
+  // Set up game event listeners
+  const setupGameListeners = () => {
+    // Player events
     socketService.on('player-joined', (data) => {
       console.log('Player joined:', data.player.name);
       setGameState(data.gameState);
@@ -56,12 +59,20 @@ export default function App() {
 
     socketService.on('player-disconnected', (data) => {
       console.log('Player disconnected');
-      Alert.alert('Player Disconnected', 'Your opponent has disconnected.');
-    });
-
-    socketService.on('player-reconnected', (data) => {
-      console.log('Player reconnected:', data.playerName);
-      Alert.alert('Player Reconnected', `${data.playerName} has reconnected.`);
+      Alert.alert(
+        'Opponent Disconnected', 
+        'Returning to lobby to find a new game.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              console.log('🔌 Player disconnected - returning to lobby');
+              handleBackToLobby();
+            }
+          }
+        ],
+        { cancelable: false } // Prevent dismissing without action
+      );
     });
 
     // Game flow events
@@ -69,137 +80,133 @@ export default function App() {
       setGameState(data.gameState);
     });
 
-    socketService.on('game-started', (data) => {
-      console.log('Game started!');
-      setGameState(data.gameState);
-      setCurrentScreen('game');
+    // Countdown event
+    socketService.on('countdown-started', (data) => {
+      console.log('Countdown started for round:', data.nextRound);
+      setCountdown(data.countdown);
+      setNextRound(data.nextRound);
+      setCurrentScreen('countdown');
+      
+      // Update countdown every second
+      let currentCount = data.countdown;
+      const timer = setInterval(() => {
+        currentCount--;
+        setCountdown(currentCount);
+        
+        if (currentCount <= 0) {
+          clearInterval(timer);
+        }
+      }, 1000);
     });
 
     socketService.on('round-started', (data) => {
       console.log('Round started:', data.roundInfo.round);
       setGameState(data.gameState);
+      setServerTimeRemaining(90); // Reset timer display
       setCurrentScreen('game');
     });
 
-    // Word submission events
-    socketService.on('word-submitted', (data) => {
-      console.log(`${data.playerName} found: ${data.word} (${data.points} pts)`);
-      setGameState(data.gameState);
+    // Handle server timer updates
+    socketService.on('timer-update', (data) => {
+      setServerTimeRemaining(data.timeRemaining);
     });
 
-    // Round end events
+    // Handle server saying time is up
+    socketService.on('round-time-expired', (data) => {
+      setServerTimeRemaining(0); // GameScreen will auto-submit when it sees 0
+    });
+
+    // Round end events - ALL rounds now go to results screen first
     socketService.on('round-ended', (data) => {
-      console.log('Round ended');
+      console.log('Round ended - going to results screen');
       setGameState(data.gameState);
       setRoundResults(data.roundResult);
-      
-      if (data.gameState.gameStatus === 'finished') {
-        setFinalResults(data.gameState.finalResults);
-        setCurrentScreen('final-results');
-      } else {
-        setCurrentScreen('results');
-      }
+      setCurrentScreen('results');
     });
 
-    // Connection events
-    socketService.on('disconnected', () => {
-      setIsConnected(false);
-      Alert.alert(
-        'Connection Lost',
-        'Lost connection to server. Attempting to reconnect...'
-      );
+    socketService.on('show-final-results', (data) => {
+      console.log('Both players ready for final results - transitioning');
+      setGameState(data.gameState);
+      setFinalResults(data.finalResults);
+      setCurrentScreen('final-results');
     });
 
-    socketService.on('reconnected', () => {
-      setIsConnected(true);
-      Alert.alert('Reconnected', 'Successfully reconnected to server.');
-    });
-
-    socketService.on('reconnect_failed', () => {
-      Alert.alert(
-        'Connection Failed',
-        'Unable to reconnect to server. Please restart the app.',
-        [{ text: 'OK', onPress: () => {} }]
-      );
-    });
   };
 
-  // Navigation handlers
+  // Action handlers - each handles its own errors
   const handleCreateRoom = async (name) => {
-    try {
-      setPlayerName(name);
-      const response = await socketService.createRoom(name);
-      setRoomCode(response.roomCode);
-      setGameState(response.game);
-      // Stay on lobby screen until second player joins
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
+    setPlayerName(name);
+    const response = await socketService.createRoom(name);
+    setRoomCode(response.roomCode);
+    setGameState(response.game);
   };
 
   const handleJoinRoom = async (code, name) => {
-    try {
-      setPlayerName(name);
-      setRoomCode(code);
-      const response = await socketService.joinRoom(code, name);
-      setGameState(response.game);
-      // Stay on lobby screen until both players ready
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
+    setPlayerName(name);
+    setRoomCode(code);
+    const response = await socketService.joinRoom(code, name);
+    setGameState(response.game);
   };
 
   const handlePlayerReady = async () => {
-    try {
-      await socketService.setPlayerReady(true);
-      // Game will start automatically when both players ready
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
+    await socketService.setPlayerReady(true);
   };
 
-  const handleSubmitWord = async (word) => {
+  // Handle round result submission
+  const handleSubmitRoundResults = async (words, totalScore) => {
     try {
-      const response = await socketService.submitWord(word);
+      console.log('📊 App submitting round results:', words.length, 'words,', totalScore, 'points');
+      const response = await socketService.submitRoundResults(words, totalScore);
+      console.log('✅ Round results submitted successfully from App');
       return response;
     } catch (error) {
-      throw error; // Let GameScreen handle the error display
+      console.error('❌ Failed to submit round results from App:', error);
+      throw error;
     }
   };
 
   const handleNextRound = async () => {
+    await socketService.setPlayerReady(true);
+  };
+
+  const handlePlayAgain = async () => {
     try {
-      await socketService.setPlayerReady(true);
-      // Next round will start automatically when both players ready
+      console.log('🔄 Starting new game with same opponent in room:', roomCode);
+      
+      // Reset local state for new game but keep room and players
+      setRoundResults(null);
+      setFinalResults(null);
+      setCountdown(3);
+      setNextRound(1);
+      setServerTimeRemaining(90);
+      setCurrentScreen('lobby');
+      
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('❌ Failed to start new game:', error);
+      Alert.alert('Error', 'Failed to start new game. Please try again.');
     }
   };
 
-  const handlePlayAgain = () => {
-    // Reset app state for new game
-    setCurrentScreen('lobby');
-    setGameState(null);
-    setPlayerName('');
-    setRoomCode('');
-    setRoundResults(null);
-    setFinalResults(null);
-  };
-
   const handleBackToLobby = () => {
-    // Disconnect from current game and return to lobby
+    console.log('🏠 Returning to lobby - disconnecting from current room');
+    
+    // Disconnect and return to lobby for new opponents
     socketService.disconnect();
+    
+    // Reset all state
     setCurrentScreen('lobby');
     setGameState(null);
     setPlayerName('');
     setRoomCode('');
     setRoundResults(null);
     setFinalResults(null);
-    setIsConnected(false);
+    setCountdown(3);
+    setNextRound(1);
+    setServerTimeRemaining(90);
     
     // Reconnect for new game
     setTimeout(() => {
-      initializeConnection();
+      initializeApp();
     }, 1000);
   };
 
@@ -215,7 +222,14 @@ export default function App() {
             gameState={gameState}
             roomCode={roomCode}
             playerName={playerName}
-            isConnected={isConnected}
+          />
+        );
+      
+      case 'countdown':
+        return (
+          <CountdownScreen
+            countdown={countdown}
+            nextRound={nextRound}
           />
         );
       
@@ -223,8 +237,9 @@ export default function App() {
         return (
           <GameScreen
             gameState={gameState}
-            onSubmitWord={handleSubmitWord}
+            onSubmitRoundResults={handleSubmitRoundResults}
             playerName={playerName}
+            timeRemaining={serverTimeRemaining}
           />
         );
       
@@ -258,17 +273,18 @@ export default function App() {
             gameState={gameState}
             roomCode={roomCode}
             playerName={playerName}
-            isConnected={isConnected}
           />
         );
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="auto" />
-      {renderCurrentScreen()}
-    </View>
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        <StatusBar style="auto" />
+        {renderCurrentScreen()}
+      </View>
+    </SafeAreaProvider>
   );
 }
 

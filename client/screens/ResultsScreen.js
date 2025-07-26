@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -49,8 +49,6 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
     }
   };
 
-
-
   // Get words sorted by points (descending)
   const getSortedWords = (words) => {
     return [...words].sort((a, b) => b.points - a.points);
@@ -63,8 +61,6 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
       </View>
     );
   }
-
-
 
   const isCurrentRoundWinner = currentPlayerData.roundScore > opponentData.roundScore;
   const isRoundTie = currentPlayerData.roundScore === opponentData.roundScore;
@@ -242,7 +238,7 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FEFEFE',
+    backgroundColor: '#FFC543',
     paddingTop: 50,
   },
   header: {
@@ -259,19 +255,29 @@ const styles = StyleSheet.create({
   winnerText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#4CAF50',
+    color: '#8B4513', 
   },
   tieText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FF9800',
+    color: '#D9A93D',
   },
   scoreCard: {
-    backgroundColor: '#F8F6F0',
+    backgroundColor: '#FFFBF2',
     marginHorizontal: 20,
     borderRadius: 16,
     padding: 20,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E8B94E',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   scoreRow: {
     flexDirection: 'row',
@@ -281,14 +287,14 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFBF2',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E0E0E0',
+    borderColor: '#D9A93D',
   },
   winnerScore: {
-    borderColor: '#4CAF50',
-    backgroundColor: '#F1F8E9',
+    borderColor: '#8B4513',
+    backgroundColor: '#FFFBF2',
   },
   playerNameText: {
     fontSize: 14,
@@ -341,14 +347,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    backgroundColor: '#F8F6F0',
+    backgroundColor: '#FFFBF2',
     borderRadius: 6,
     marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#E8B94E',
   },
   uniqueWordItem: {
-    backgroundColor: '#E3F2FD',
+    backgroundColor: '#FFFBF2',
     borderLeftWidth: 3,
-    borderLeftColor: '#326891',
+    borderLeftColor: '#8B4513',
   },
   wordText: {
     fontSize: 14,
@@ -356,11 +364,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   uniqueWordText: {
-    color: '#1976D2',
+    color: '#8B4513',
     fontWeight: '600',
   },
   pangramWord: {
-    color: '#FF9800',
+    color: '#D9A93D',
     fontWeight: 'bold',
   },
   wordPoints: {
@@ -375,7 +383,7 @@ const styles = StyleSheet.create({
   },
   readyStatus: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#8B4513',
     textAlign: 'center',
     fontWeight: '500',
   },
@@ -384,18 +392,29 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   nextRoundButton: {
-    backgroundColor: '#326891',
+    backgroundColor: '#FFFBF2',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D9A93D',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   nextRoundButtonText: {
-    color: '#FFFFFF',
+    color: '#333333',
     fontSize: 16,
     fontWeight: '600',
   },
   disabledButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#E8B94E',
+    borderColor: '#D9A93D',
   },
   loadingText: {
     fontSize: 18,

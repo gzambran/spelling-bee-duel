@@ -7,6 +7,24 @@ class WordData {
     this.isLoaded = false;
   }
 
+  // Calculate points for a word based on length
+  calculateWordPoints(word) {
+    const length = word.length;
+    if (length < 4) {
+      return 0;
+    }
+    
+    // Exponential scoring: length² points
+    return length * length;
+  }
+
+  // Calculate total points including pangram bonus
+  calculateTotalPoints(word, isPangram) {
+    const basePoints = this.calculateWordPoints(word);
+    const pangramBonus = isPangram ? 25 : 0;
+    return basePoints + pangramBonus;
+  }
+
   // Load all puzzle data from JSON files
   async loadPuzzleData() {
     try {
@@ -63,7 +81,7 @@ class WordData {
            Array.isArray(puzzle.pangrams);
   }
 
-  // Get a random puzzle for a new game
+  // Get a random puzzle for a new game with enhanced data for client validation
   getRandomPuzzle() {
     if (!this.isLoaded || this.puzzles.length === 0) {
       throw new Error('Puzzle data not loaded');
@@ -74,19 +92,34 @@ class WordData {
     
     console.log(`🎯 Selected puzzle: ${puzzle.displayDate || puzzle.printDate} (${puzzle.answers.length} words, ${puzzle.pangrams.length} pangrams)`);
     
+    // Pre-calculate points for all valid words
+    const wordPoints = {};
+    const validWords = puzzle.answers.map(word => word.toLowerCase());
+    const pangrams = puzzle.pangrams.map(pangram => pangram.toLowerCase());
+    
+    puzzle.answers.forEach(word => {
+      const wordLower = word.toLowerCase();
+      const isPangram = pangrams.includes(wordLower);
+      wordPoints[wordLower] = this.calculateTotalPoints(word, isPangram);
+    });
+    
+    console.log(`💰 Pre-calculated points for ${Object.keys(wordPoints).length} words`);
+    
     return {
       centerLetter: puzzle.centerLetter,
       outerLetters: puzzle.outerLetters,
       validLetters: [puzzle.centerLetter, ...puzzle.outerLetters],
+      validWords: validWords,
+      pangrams: pangrams,
+      wordPoints: wordPoints,
       answers: puzzle.answers,
-      pangrams: puzzle.pangrams,
       totalWords: puzzle.answers.length,
       totalPangrams: puzzle.pangrams.length,
       puzzleDate: puzzle.displayDate || puzzle.printDate
     };
   }
 
-  // Validate if a word is correct for the given puzzle
+  // Validate if a word is correct for the given puzzle (keep for server-side use if needed)
   isValidWord(word, puzzle) {
     if (!word || !puzzle) {
       return false;
@@ -112,18 +145,20 @@ class WordData {
       }
     }
 
-    // Check if word is in the answer list
-    return puzzle.answers.map(a => a.toLowerCase()).includes(wordLower);
+    // Check if word is in the answer list - use validWords if available, fallback to answers
+    const validWords = puzzle.validWords || puzzle.answers.map(a => a.toLowerCase());
+    return validWords.includes(wordLower);
   }
 
-  // Check if a word is a pangram
+  // Check if a word is a pangram (keep for server-side use if needed)
   isPangram(word, puzzle) {
     if (!word || !puzzle) {
       return false;
     }
 
     const wordLower = word.toLowerCase().trim();
-    return puzzle.pangrams.map(p => p.toLowerCase()).includes(wordLower);
+    const pangrams = puzzle.pangrams || puzzle.pangrams.map(p => p.toLowerCase());
+    return pangrams.includes(wordLower);
   }
 
   // Get statistics about loaded puzzles

@@ -121,6 +121,36 @@ io.on('connection', (socket) => {
       }
 
       const game = roomManager.getRoom(roomCode);
+      
+      // SPECIAL HANDLING: If game is 'finished' but players are clicking "Continue to Final Results"
+      if (game.gameStatus === 'finished' && data.ready) {
+        game.players[socket.id].ready = true;
+        
+        // Check if both players are ready to see final results
+        const allReadyForFinalResults = Object.values(game.players).every(p => p.ready);
+        
+        if (allReadyForFinalResults) {
+          console.log(`🏆 Both players ready for final results in room ${roomCode}`);
+          
+          // Emit the final results event
+          io.to(roomCode).emit('show-final-results', {
+            gameState: gameLogic.getGameState(game),
+            finalResults: game.finalResults
+          });
+        }
+        
+        // Notify about ready status
+        io.to(roomCode).emit('player-ready-status', {
+          playerId: socket.id,
+          ready: data.ready,
+          gameState: gameLogic.getGameState(game)
+        });
+        
+        callback({ success: true, canStartNext: allReadyForFinalResults });
+        return;
+      }
+
+      // Normal ready handling for other states
       const canStartNext = gameLogic.setPlayerReady(game, socket.id, data.ready);
       
       console.log(`🟢 Player ready status: ${game.players[socket.id]?.name} = ${data.ready}`);
@@ -133,21 +163,26 @@ io.on('connection', (socket) => {
         gameState: gameLogic.getGameState(game)
       });
 
-      // Start game or next round if both players ready
-      if (gameLogic.canStartGame(game)) {
-        console.log(`🎯 Starting game in room ${roomCode}`);
-        const roundInfo = roomManager.startRoundWithTimer(roomCode, io);
-        io.to(roomCode).emit('game-started', {
-          roundInfo,
+      // Check for restart, first game, or next round
+      if (gameLogic.canRestartGame(game)) {
+        console.log(`🔄 Restarting game in room ${roomCode}`);
+        gameLogic.restartGame(game);
+        
+        // Notify players that game has been reset
+        io.to(roomCode).emit('game-restarted', {
           gameState: gameLogic.getGameState(game)
         });
+        
+        // Start countdown for the new game
+        console.log(`🎯 Starting countdown for restarted game in room ${roomCode}`);
+        roomManager.startRoundWithTimer(roomCode, io);
+        
+      } else if (gameLogic.canStartGame(game)) {
+        console.log(`🎯 Starting countdown for first game in room ${roomCode}`);
+        roomManager.startRoundWithTimer(roomCode, io);
       } else if (canStartNext) {
-        console.log(`🎯 Starting next round in room ${roomCode}`);
-        const roundInfo = roomManager.startRoundWithTimer(roomCode, io);
-        io.to(roomCode).emit('round-started', {
-          roundInfo,
-          gameState: gameLogic.getGameState(game)
-        });
+        console.log(`🎯 Starting countdown for next round in room ${roomCode}`);
+        roomManager.startRoundWithTimer(roomCode, io);
       } else {
         console.log(`⏳ Waiting for more players or ready status in room ${roomCode}`);
       }
@@ -160,10 +195,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle word submission
-  socket.on('submit-word', (data, callback) => {
+  // Handle round results submission from client
+  socket.on('submit-round-results', (data, callback) => {
     try {
-      const { word } = data;
+      const { words, totalScore } = data;
       const roomCode = roomManager.getPlayerRoom(socket.id);
       
       if (!roomCode) {
@@ -171,82 +206,40 @@ io.on('connection', (socket) => {
       }
 
       const game = roomManager.getRoom(roomCode);
-      const result = gameLogic.submitWord(game, socket.id, word);
+      const result = gameLogic.processRoundResults(game, socket.id, { words, totalScore });
       
       callback({ success: true, ...result });
       
-      // Notify all players in room about the word submission
-      io.to(roomCode).emit('word-submitted', {
-        playerId: socket.id,
-        playerName: game.players[socket.id].name,
-        word: result.word,
-        points: result.points,
-        isPangram: result.isPangram,
-        gameState: gameLogic.getGameState(game)
-      });
+      console.log(`📊 Results submitted by player in room ${roomCode}`);
       
-    } catch (error) {
-      callback({ success: false, error: error.message });
-    }
-  });
+      // Check if both players have submitted results using explicit flag
+      const playersWithResults = Object.values(game.players).filter(p => p.hasSubmittedResults === true);
+      const totalPlayers = Object.keys(game.players).length;
+      
+      console.log(`📈 Results received: ${playersWithResults.length}/${totalPlayers} players`);
+      
+      // If all players have submitted, end the round immediately
+      if (playersWithResults.length === totalPlayers && game.roundStatus === 'active') {
+        console.log(`🎯 All players submitted results - ending round ${game.currentRound} in room ${roomCode}`);
+        
+        const roundResult = gameLogic.endRound(game);
+        
+        // Clear any pending timers for this room
+        roomManager.clearRoundTimer(roomCode);
+        
+        // FIXED: Always emit 'round-ended' first, even for the final round
+        // This allows players to see Round 3 results before final results
+        io.to(roomCode).emit('round-ended', {
+          roundResult,
+          gameState: gameLogic.getGameState(game)
+        });
 
-  // Handle manual round end (if needed)
-  socket.on('end-round', (data, callback) => {
-    try {
-      const roomCode = roomManager.getPlayerRoom(socket.id);
-      if (!roomCode) {
-        throw new Error('Player not in any room');
+        // Note: Final results will be shown only after players click "Continue to Final Results"
+        // This is handled in the 'player-ready' event above
       }
-
-      const game = roomManager.getRoom(roomCode);
-      const roundResult = gameLogic.endRound(game);
-      
-      // Clear the automatic timer
-      roomManager.clearRoundTimer(roomCode);
-      
-      // Notify all players
-      io.to(roomCode).emit('round-ended', {
-        roundResult,
-        gameState: gameLogic.getGameState(game)
-      });
-      
-      callback({ success: true, roundResult });
       
     } catch (error) {
-      callback({ success: false, error: error.message });
-    }
-  });
-
-  // Handle getting current game state
-  socket.on('get-game-state', (data, callback) => {
-    try {
-      const roomCode = roomManager.getPlayerRoom(socket.id);
-      if (!roomCode) {
-        throw new Error('Player not in any room');
-      }
-
-      const roomInfo = roomManager.getRoomInfo(roomCode);
-      callback({ success: true, ...roomInfo });
-      
-    } catch (error) {
-      callback({ success: false, error: error.message });
-    }
-  });
-
-  // Handle getting round results
-  socket.on('get-round-results', (data, callback) => {
-    try {
-      const roomCode = roomManager.getPlayerRoom(socket.id);
-      if (!roomCode) {
-        throw new Error('Player not in any room');
-      }
-
-      const game = roomManager.getRoom(roomCode);
-      const results = gameLogic.getRoundResults(game, data.roundNumber);
-      
-      callback({ success: true, results });
-      
-    } catch (error) {
+      console.error('Submit round results error:', error.message);
       callback({ success: false, error: error.message });
     }
   });
