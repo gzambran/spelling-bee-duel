@@ -2,34 +2,99 @@ import { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   ScrollView,
-  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
   Animated,
 } from 'react-native';
 
-const { width: screenWidth } = Dimensions.get('window');
+import socketService from '../services/socketService';
+import WordsComparison from '../components/WordsComparison';
+import RecordNotification from '../components/RecordNotification';
 
-const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => {
-
-  const [readyPressed, setReadyPressed] = useState(false);
+const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
+  const [isReady, setIsReady] = useState(false);
+  const [recordNotifications, setRecordNotifications] = useState([]);
   const slideAnim = new Animated.Value(0);
 
-  // Get player data from results
-  const currentPlayerData = roundResults?.players 
-    ? Object.values(roundResults.players).find(p => p.name === playerName)
-    : null;
-  
-  const opponentData = roundResults?.players 
-    ? Object.values(roundResults.players).find(p => p.name !== playerName)
-    : null;
+  // Identify current player - try multiple approaches for robustness
+  const getCurrentPlayerName = () => {
+    // Method 1: Use socket ID if available in players data
+    if (socketService.socket?.id && roundResult?.players) {
+      const players = Object.entries(roundResult.players);
+      const currentPlayerEntry = players.find(([socketId]) => socketId === socketService.socket.id);
+      if (currentPlayerEntry) {
+        return currentPlayerEntry[1].name;
+      }
+    }
+    
+    // Method 2: Use gameState to find current player
+    if (gameState?.players?.length > 0 && socketService.socket?.id) {
+      const currentPlayer = gameState.players.find(p => p.socketId === socketService.socket.id);
+      if (currentPlayer) {
+        return currentPlayer.name;
+      }
+    }
+    
+    // Method 3: Fallback to first player (not ideal but prevents crashes)
+    if (roundResult?.players) {
+      const firstPlayer = Object.values(roundResult.players)[0];
+      return firstPlayer?.name || 'You';
+    }
+    
+    return 'You';
+  };
 
-  // Get current game state player data for ready status
-  const currentGamePlayer = gameState?.players.find(p => p.name === playerName);
-  const opponentGamePlayer = gameState?.players.find(p => p.name !== playerName);
+  // Get player data from round results
+  const getPlayerData = () => {
+    if (!roundResult?.players) {
+      return {
+        currentPlayerData: null,
+        opponentData: null,
+        currentPlayerName: 'You',
+        opponentName: 'Opponent'
+      };
+    }
 
-  // Animate in on mount
+    const currentPlayerName = getCurrentPlayerName();
+    const players = Object.values(roundResult.players);
+    
+    const currentPlayerData = players.find(p => p.name === currentPlayerName);
+    const opponentData = players.find(p => p.name !== currentPlayerName);
+
+    return {
+      currentPlayerData,
+      opponentData,
+      currentPlayerName,
+      opponentName: opponentData?.name || 'Opponent'
+    };
+  };
+
+  const { currentPlayerData, opponentData, currentPlayerName, opponentName } = getPlayerData();
+
+  // Calculate round winner status
+  const getRoundWinnerStatus = () => {
+    if (!currentPlayerData || !opponentData) {
+      return { isCurrentRoundWinner: false, isRoundTie: false };
+    }
+    
+    const isCurrentRoundWinner = currentPlayerData.roundScore > opponentData.roundScore;
+    const isRoundTie = currentPlayerData.roundScore === opponentData.roundScore;
+    
+    return { isCurrentRoundWinner, isRoundTie };
+  };
+
+  const { isCurrentRoundWinner, isRoundTie } = getRoundWinnerStatus();
+
+  // Utility function to sort words by points (descending)
+  const getSortedWords = (words) => {
+    if (!Array.isArray(words)) return [];
+    return [...words].sort((a, b) => b.points - a.points);
+  };
+
+  // Animation on mount
   useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: 1,
@@ -38,23 +103,54 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
     }).start();
   }, []);
 
-  // Handle ready for next round
-  const handleNextRound = async () => {
-    setReadyPressed(true);
+  // Listen for record notifications when round ends
+  useEffect(() => {
+    const handleRoundEnded = (data) => {
+      // Check if this round has record notifications for the current user
+      if (data.recordNotifications && socketService.socket?.id) {
+        const myRecords = data.recordNotifications[socketService.socket.id];
+        if (myRecords && myRecords.roundRecords.length > 0) {
+          console.log('🎉 Round records broken:', myRecords.roundRecords);
+          setRecordNotifications(myRecords.roundRecords);
+        }
+      }
+    };
+
+    // Set up listener
+    socketService.on('round-ended', handleRoundEnded);
+
+    // Check if we already have record notifications from props
+    if (roundResult?.recordsUpdated && socketService.socket?.id) {
+      const myRecords = roundResult.recordsUpdated[socketService.socket.id];
+      if (myRecords && myRecords.roundRecords && myRecords.roundRecords.length > 0) {
+        setRecordNotifications(myRecords.roundRecords);
+      }
+    }
+
+    return () => {
+      socketService.off('round-ended', handleRoundEnded);
+    };
+  }, [roundResult]);
+
+  const handleReady = async () => {
     try {
-      await onNextRound();
+      setIsReady(true);
+      await socketService.setPlayerReady(true);
+      if (onPlayerReady) {
+        onPlayerReady();
+      }
     } catch (error) {
-      setReadyPressed(false);
-      // Error handled by parent
+      console.error('Error setting player ready:', error);
+      setIsReady(false);
     }
   };
 
-  // Get words sorted by points (descending)
-  const getSortedWords = (words) => {
-    return [...words].sort((a, b) => b.points - a.points);
+  const dismissRecordNotifications = () => {
+    setRecordNotifications([]);
   };
 
-  if (!roundResults || !currentPlayerData || !opponentData) {
+  // Loading state
+  if (!roundResult || !gameState || !currentPlayerData || !opponentData) {
     return (
       <View style={styles.container}>
         <Text style={styles.loadingText}>Loading results...</Text>
@@ -62,12 +158,35 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
     );
   }
 
-  const isCurrentRoundWinner = currentPlayerData.roundScore > opponentData.roundScore;
-  const isRoundTie = currentPlayerData.roundScore === opponentData.roundScore;
+  const isLastRound = gameState.currentRound >= gameState.totalRounds;
+  const buttonText = isLastRound 
+    ? 'Continue to Final Results' 
+    : `Ready for Round ${gameState.currentRound + 1}`;
+
+  // Get opponent ready status
+  const getOpponentReadyStatus = () => {
+    if (!gameState?.players) return false;
+    
+    const opponent = gameState.players.find(p => p.name === opponentName);
+    return opponent?.ready || false;
+  };
+
+  const opponentIsReady = getOpponentReadyStatus();
 
   return (
-    <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <RecordNotification 
+        records={recordNotifications}
+        onDismiss={dismissRecordNotifications}
+      />
+
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <Animated.View 
           style={[
@@ -83,23 +202,48 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
             },
           ]}
         >
-          <Text style={styles.roundTitle}>
-            Round {roundResults.round} Results
+          <Text style={styles.title}>
+            Round {roundResult.round} Results
           </Text>
           
           {isRoundTie ? (
             <Text style={styles.tieText}>It's a tie!</Text>
           ) : (
             <Text style={styles.winnerText}>
-              {isCurrentRoundWinner ? 'You won this round!' : `${opponentData.name} won this round!`}
+              {isCurrentRoundWinner ? 'You won this round!' : `${opponentName} won this round!`}
             </Text>
           )}
+
+          {/* Simplified Score Display */}
+          <View style={styles.simpleScoreDisplay}>
+            <View style={styles.scoreColumn}>
+              <Text style={styles.playerScoreName}>{currentPlayerName}</Text>
+              <Text style={[
+                styles.playerScoreValue,
+                isCurrentRoundWinner && !isRoundTie && styles.winnerScoreValue
+              ]}>
+                {currentPlayerData.roundScore}
+              </Text>
+            </View>
+            
+            <Text style={styles.vsText}>VS</Text>
+            
+            <View style={styles.scoreColumn}>
+              <Text style={styles.playerScoreName}>{opponentName}</Text>
+              <Text style={[
+                styles.playerScoreValue,
+                !isCurrentRoundWinner && !isRoundTie && styles.winnerScoreValue
+              ]}>
+                {opponentData.roundScore}
+              </Text>
+            </View>
+          </View>
         </Animated.View>
 
-        {/* Score Comparison */}
+        {/* Detailed Word Lists */}
         <Animated.View 
           style={[
-            styles.scoreCard,
+            styles.wordsSection,
             {
               opacity: slideAnim,
               transform: [{
@@ -111,127 +255,35 @@ const ResultsScreen = ({ roundResults, gameState, onNextRound, playerName }) => 
             },
           ]}
         >
-          <View style={styles.scoreRow}>
-            <View style={[
-              styles.playerScore,
-              isCurrentRoundWinner && !isRoundTie && styles.winnerScore
-            ]}>
-              <Text style={styles.playerNameText}>{currentPlayerData.name}</Text>
-              <Text style={styles.roundScoreText}>{currentPlayerData.roundScore}</Text>
-              <Text style={styles.totalScoreText}>Total: {currentPlayerData.totalScore}</Text>
-            </View>
-
-            <View style={styles.vsContainer}>
-              <Text style={styles.vsText}>VS</Text>
-            </View>
-
-            <View style={[
-              styles.playerScore,
-              !isCurrentRoundWinner && !isRoundTie && styles.winnerScore
-            ]}>
-              <Text style={styles.playerNameText}>{opponentData.name}</Text>
-              <Text style={styles.roundScoreText}>{opponentData.roundScore}</Text>
-              <Text style={styles.totalScoreText}>Total: {opponentData.totalScore}</Text>
-            </View>
-          </View>
+          <WordsComparison
+            currentPlayerData={currentPlayerData}
+            opponentData={opponentData}
+            getSortedWords={getSortedWords}
+          />
         </Animated.View>
 
-        {/* Word Lists */}
-        <View style={styles.wordsContainer}>
-          <View style={styles.wordColumn}>
-            <Text style={styles.columnTitle}>Your Words ({currentPlayerData.wordCount})</Text>
-            <ScrollView style={styles.wordsList}>
-              {getSortedWords(currentPlayerData.words).map((wordEntry, index) => {
-                const opponentFoundIt = opponentData.words.some(w => 
-                  w.word.toLowerCase() === wordEntry.word.toLowerCase()
-                );
-                
-                return (
-                  <View key={index} style={[
-                    styles.wordItem,
-                    !opponentFoundIt && styles.uniqueWordItem
-                  ]}>
-                    <Text style={[
-                      styles.wordText,
-                      wordEntry.isPangram && styles.pangramWord,
-                      !opponentFoundIt && styles.uniqueWordText
-                    ]}>
-                      {wordEntry.word.toUpperCase()}
-                    </Text>
-                    <Text style={styles.wordPoints}>
-                      {wordEntry.points}{wordEntry.isPangram ? '★' : ''}
-                    </Text>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          <View style={styles.wordColumn}>
-            <Text style={styles.columnTitle}>{opponentData.name}'s Words ({opponentData.wordCount})</Text>
-            <ScrollView style={styles.wordsList}>
-              {getSortedWords(opponentData.words).map((wordEntry, index) => {
-                const playerFoundIt = currentPlayerData.words.some(w => 
-                  w.word.toLowerCase() === wordEntry.word.toLowerCase()
-                );
-                
-                return (
-                  <View key={index} style={[
-                    styles.wordItem,
-                    !playerFoundIt && styles.uniqueWordItem
-                  ]}>
-                    <Text style={[
-                      styles.wordText,
-                      wordEntry.isPangram && styles.pangramWord,
-                      !playerFoundIt && styles.uniqueWordText
-                    ]}>
-                      {wordEntry.word.toUpperCase()}
-                    </Text>
-                    <Text style={styles.wordPoints}>
-                      {wordEntry.points}{wordEntry.isPangram ? '★' : ''}
-                    </Text>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-
         {/* Ready Status */}
-        <View style={styles.readySection}>
-          {currentGamePlayer?.ready && (
-            <Text style={styles.readyStatus}>
-              ✅ You're ready! Waiting for {opponentData.name}...
+        {opponentIsReady && !isReady && (
+          <View style={styles.opponentReadyMessage}>
+            <Text style={styles.opponentReadyText}>
+              {opponentName} is ready!
             </Text>
-          )}
-          
-          {opponentGamePlayer?.ready && !currentGamePlayer?.ready && (
-            <Text style={styles.readyStatus}>
-              {opponentData.name} is ready!
-            </Text>
-          )}
-        </View>
+          </View>
+        )}
 
-        {/* Next Round Button */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[
-              styles.nextRoundButton,
-              (readyPressed || currentGamePlayer?.ready) && styles.disabledButton
-            ]}
-            onPress={handleNextRound}
-            disabled={readyPressed || currentGamePlayer?.ready}
-          >
-            <Text style={styles.nextRoundButtonText}>
-              {gameState.currentRound >= gameState.totalRounds 
-                ? 'Ready for Final Results'
-                : `Ready for Round ${gameState.currentRound + 1}`
-              }
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Ready Button */}
+        <TouchableOpacity
+          style={[styles.readyButton, isReady && styles.readyButtonPressed]}
+          onPress={handleReady}
+          disabled={isReady}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.readyButtonText, isReady && styles.readyButtonTextPressed]}>
+            {isReady ? 'Waiting for opponent...' : buttonText}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -239,14 +291,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFC543',
-    paddingTop: 50,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: 60,
+    paddingBottom: 30,
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#2E2E2E',
+    textAlign: 'center',
+    marginTop: 100,
   },
   header: {
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 20,
+    marginBottom: 10,
   },
-  roundTitle: {
+  title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#2E2E2E',
@@ -255,19 +318,23 @@ const styles = StyleSheet.create({
   winnerText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#8B4513', 
+    color: '#8B4513',
+    marginBottom: 20,
   },
   tieText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#D9A93D',
-  },
-  scoreCard: {
-    backgroundColor: '#FFFBF2',
-    marginHorizontal: 20,
-    borderRadius: 16,
-    padding: 20,
     marginBottom: 20,
+  },
+  simpleScoreDisplay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFBF2',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 30,
     borderWidth: 1,
     borderColor: '#E8B94E',
     shadowColor: '#000',
@@ -279,148 +346,77 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  scoreRow: {
-    flexDirection: 'row',
+  scoreColumn: {
     alignItems: 'center',
+    minWidth: 80,
   },
-  playerScore: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFFBF2',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#D9A93D',
-  },
-  winnerScore: {
-    borderColor: '#8B4513',
-    backgroundColor: '#FFFBF2',
-  },
-  playerNameText: {
+  playerScoreName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#666666',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  roundScoreText: {
-    fontSize: 32,
+  playerScoreValue: {
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#2E2E2E',
-    marginBottom: 4,
   },
-  totalScoreText: {
-    fontSize: 12,
-    color: '#666666',
-  },
-  vsContainer: {
-    paddingHorizontal: 16,
+  winnerScoreValue: {
+    color: '#8B4513',
   },
   vsText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#666666',
+    marginHorizontal: 30,
   },
-
-  wordsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    paddingHorizontal: 20,
+  wordsSection: {
     marginBottom: 20,
   },
-  wordColumn: {
-    flex: 1,
-    paddingHorizontal: 8,
-  },
-  columnTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2E2E2E',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  wordsList: {
-    maxHeight: 300,
-  },
-  wordItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    backgroundColor: '#FFFBF2',
-    borderRadius: 6,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: '#E8B94E',
-  },
-  uniqueWordItem: {
-    backgroundColor: '#FFFBF2',
-    borderLeftWidth: 3,
-    borderLeftColor: '#8B4513',
-  },
-  wordText: {
-    fontSize: 14,
-    color: '#2E2E2E',
-    fontWeight: '500',
-  },
-  uniqueWordText: {
-    color: '#8B4513',
-    fontWeight: '600',
-  },
-  pangramWord: {
-    color: '#D9A93D',
-    fontWeight: 'bold',
-  },
-  wordPoints: {
-    fontSize: 12,
-    color: '#666666',
-    fontWeight: '600',
-  },
-
-  readySection: {
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  readyStatus: {
-    fontSize: 14,
-    color: '#8B4513',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  buttonContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  nextRoundButton: {
-    backgroundColor: '#FFFBF2',
+  opponentReadyMessage: {
+    backgroundColor: '#E8F5E8',
     borderRadius: 12,
     padding: 16,
-    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#D9A93D',
+    borderColor: '#4CAF50',
+  },
+  opponentReadyText: {
+    fontSize: 16,
+    color: '#2E7D32',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  readyButton: {
+    backgroundColor: '#8B4513',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 20,
+    marginVertical: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#654321',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 3,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  nextRoundButtonText: {
-    color: '#333333',
-    fontSize: 16,
-    fontWeight: '600',
+  readyButtonPressed: {
+    backgroundColor: '#654321',
+    borderColor: '#4A2C17',
   },
-  disabledButton: {
-    backgroundColor: '#E8B94E',
-    borderColor: '#D9A93D',
-  },
-  loadingText: {
+  readyButtonText: {
     fontSize: 18,
-    color: '#666666',
-    textAlign: 'center',
-    marginTop: 100,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  readyButtonTextPressed: {
+    color: '#CCCCCC',
   },
 });
 

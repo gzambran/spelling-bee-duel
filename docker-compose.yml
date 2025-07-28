@@ -11,8 +11,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
     volumes:
-      # Mount puzzle data to persist across container restarts
       - ./server/data:/app/data:ro
+      - ./server/db:/app/db
     networks:
       - spelling-bee-network
     healthcheck:

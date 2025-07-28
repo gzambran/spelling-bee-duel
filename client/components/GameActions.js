@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     borderColor: '#E8B94E',
   },
   shuffleButtonText: {
-    fontSize: 28,
+    fontSize: 40,
     fontWeight: '600',
     color: '#333333',
   },

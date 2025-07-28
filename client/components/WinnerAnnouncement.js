@@ -1,5 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
+
+// Import the images
+const happyImage = require('../assets/images/happy.png');
+const sadImage = require('../assets/images/sad.png');
 
 const WinnerAnnouncement = ({ finalResults, playerName }) => {
   if (!finalResults) {
@@ -22,6 +26,13 @@ const WinnerAnnouncement = ({ finalResults, playerName }) => {
         </View>
       ) : (
         <View style={styles.winnerContainer}>
+          {/* Happy/Sad Image based on win/loss */}
+          <Image 
+            source={isWinner ? happyImage : sadImage}
+            style={styles.resultImage}
+            resizeMode="contain"
+          />
+          
           <Text style={[
             styles.winnerText,
             { color: isWinner ? '#4CAF50' : '#F44336' }
@@ -51,6 +62,11 @@ const styles = StyleSheet.create({
   },
   winnerContainer: {
     alignItems: 'center',
+  },
+  resultImage: {
+    width: 100,
+    height: 100,
+    marginBottom: 20,
   },
   winnerText: {
     fontSize: 32,

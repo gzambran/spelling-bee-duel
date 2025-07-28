@@ -6,7 +6,7 @@ import {
   Animated,
 } from 'react-native';
 
-const CountdownScreen = ({ countdown, nextRound }) => {
+const CountdownScreen = ({ countdown, nextRound, isPracticeMode = false }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -38,11 +38,18 @@ const CountdownScreen = ({ countdown, nextRound }) => {
     }).start();
   }, [fadeAnim]);
 
+  // Choose styles based on practice mode
+  const containerStyle = isPracticeMode ? styles.practiceContainer : styles.container;
+  const roundCardStyle = isPracticeMode ? styles.practiceRoundCard : styles.roundCard;
+  const readyTextStyle = isPracticeMode ? styles.practiceReadyText : styles.readyText;
+
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+    <Animated.View style={[containerStyle, { opacity: fadeAnim }]}>
       <View style={styles.content}>
-        <View style={styles.roundCard}>
-          <Text style={styles.roundText}>Round {nextRound}</Text>
+        <View style={roundCardStyle}>
+          <Text style={styles.roundText}>
+            {isPracticeMode ? 'Practice Mode' : `Round ${nextRound}`}
+          </Text>
         </View>
         
         <Animated.Text 
@@ -57,7 +64,7 @@ const CountdownScreen = ({ countdown, nextRound }) => {
           {countdown > 0 ? countdown : 'GO!'}
         </Animated.Text>
         
-        <Text style={styles.readyText}>
+        <Text style={readyTextStyle}>
           {countdown > 0 ? 'Get Ready!' : 'Start Finding Words!'}
         </Text>
       </View>
@@ -66,15 +73,24 @@ const CountdownScreen = ({ countdown, nextRound }) => {
 };
 
 const styles = StyleSheet.create({
+  // Regular game styles
   container: {
     flex: 1,
     backgroundColor: '#FFC543',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Practice mode styles
+  practiceContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   content: {
     alignItems: 'center',
   },
+  // Regular round card
   roundCard: {
     backgroundColor: '#FFFBF2',
     borderRadius: 16,
@@ -83,6 +99,24 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     borderWidth: 1,
     borderColor: '#E8B94E',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  // Practice round card
+  practiceRoundCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -105,6 +139,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
+  // Regular ready text
   readyText: {
     fontSize: 18,
     fontWeight: '600',
@@ -116,6 +151,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#D9A93D',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  // Practice ready text
+  practiceReadyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333333',
+    textAlign: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#8B4513',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,

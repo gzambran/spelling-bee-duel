@@ -1,25 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export const useGameState = (gameState, timeRemaining, onSubmitRoundResults) => {
-  // Local state for submitted words and score
+
   const [submittedWords, setSubmittedWords] = useState([]);
   const [currentScore, setCurrentScore] = useState(0);
-  
-  // Local state for shuffled letters (client-side only)
   const [shuffledOuterLetters, setShuffledOuterLetters] = useState([]);
-  
-  // Track the puzzle ID to detect when we need new shuffle
   const [currentPuzzleId, setCurrentPuzzleId] = useState(null);
   const [hasSubmittedResults, setHasSubmittedResults] = useState(false);
-
-  // NEW: Track submission attempts and show user feedback
   const [submissionAttempts, setSubmissionAttempts] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
-
-  // Get puzzle data for client-side validation
   const puzzleData = gameState?.puzzle;
 
-  // Debug puzzle data on first load
   useEffect(() => {
     if (puzzleData) {
       console.log('🧩 Puzzle data received:', {
@@ -143,18 +134,13 @@ export const useGameState = (gameState, timeRemaining, onSubmitRoundResults) => 
   }, []);
 
   return {
-    // State
     submittedWords,
     currentScore,
     shuffledOuterLetters,
     hasSubmittedResults,
     puzzleData,
-    
-    // NEW: Submission status for debugging/UI
     submissionAttempts,
     isRetrying,
-    
-    // Actions
     handleShuffleLetters,
     addSubmittedWord,
     handleSubmitResults

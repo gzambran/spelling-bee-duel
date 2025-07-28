@@ -161,14 +161,63 @@ class WordData {
     return pangrams.includes(wordLower);
   }
 
-  // Get statistics about loaded puzzles
+  // Get statistics about loaded puzzles with date range
   getStats() {
     if (!this.isLoaded) {
       return { loaded: false };
     }
 
+    // Calculate basic stats
     const totalWords = this.puzzles.reduce((sum, puzzle) => sum + puzzle.answers.length, 0);
     const totalPangrams = this.puzzles.reduce((sum, puzzle) => sum + puzzle.pangrams.length, 0);
+    
+    // Calculate date range
+    let oldestDate = null;
+    let newestDate = null;
+    
+    for (const puzzle of this.puzzles) {
+      const dateStr = puzzle.printDate || puzzle.displayDate;
+      if (!dateStr) continue;
+      
+      // Parse date (handle both YYYY-MM-DD and display formats)
+      let puzzleDate;
+      if (dateStr.includes('-')) {
+        // Format: 2022-01-01
+        puzzleDate = new Date(dateStr + 'T00:00:00');
+      } else {
+        // Format: "January 1, 2022"
+        puzzleDate = new Date(dateStr);
+      }
+      
+      if (isNaN(puzzleDate.getTime())) continue; // Skip invalid dates
+      
+      if (!oldestDate || puzzleDate < oldestDate) {
+        oldestDate = puzzleDate;
+      }
+      if (!newestDate || puzzleDate > newestDate) {
+        newestDate = puzzleDate;
+      }
+    }
+    
+    // Format date range for display
+    let dateRange = 'Unknown';
+    if (oldestDate && newestDate) {
+      const formatDate = (date) => {
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long' 
+        });
+      };
+      
+      const oldestFormatted = formatDate(oldestDate);
+      const newestFormatted = formatDate(newestDate);
+      
+      if (oldestFormatted === newestFormatted) {
+        dateRange = oldestFormatted;
+      } else {
+        dateRange = `${oldestFormatted} - ${newestFormatted}`;
+      }
+    }
     
     return {
       loaded: true,
@@ -176,7 +225,10 @@ class WordData {
       totalWords,
       totalPangrams,
       avgWordsPerPuzzle: Math.round(totalWords / this.puzzles.length),
-      avgPangramsPerPuzzle: Math.round((totalPangrams / this.puzzles.length) * 10) / 10
+      avgPangramsPerPuzzle: Math.round((totalPangrams / this.puzzles.length) * 10) / 10,
+      dateRange,
+      oldestDate: oldestDate ? oldestDate.toISOString().split('T')[0] : null,
+      newestDate: newestDate ? newestDate.toISOString().split('T')[0] : null
     };
   }
 }

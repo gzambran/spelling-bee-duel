@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import PlayersList from './PlayersList';
 
-const WaitingRoom = ({ gameState, roomCode, playerName, onPlayerReady }) => {
+const WaitingRoom = ({ gameState, roomCode, playerName, onPlayerReady, onBackToLobby }) => {
   const playerCount = gameState.players.length;
   const allReady = gameState.players.every(p => p.ready);
   const currentPlayer = gameState.players.find(p => p.name === playerName);
@@ -65,6 +65,15 @@ const WaitingRoom = ({ gameState, roomCode, playerName, onPlayerReady }) => {
           <Text style={styles.startingText}>Starting game...</Text>
         </View>
       )}
+
+      {/* Back to Lobby Button */}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={onBackToLobby}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.backButtonText}>Back to Lobby</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -147,6 +156,29 @@ const styles = StyleSheet.create({
     color: '#2E2E2E',
     fontWeight: '500',
     marginTop: 8,
+  },
+  backButton: {
+    backgroundColor: '#FFFBF2',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 'auto',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E8B94E',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2E2E2E',
   },
 });
 

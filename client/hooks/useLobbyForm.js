@@ -1,108 +1,56 @@
 import { useState } from 'react';
-import { Alert, Keyboard } from 'react-native';
+import { Alert } from 'react-native';
 
-export const useLobbyForm = (initialPlayerName = '') => {
-  const [playerNameInput, setPlayerNameInput] = useState(initialPlayerName);
+export const useLobbyForm = () => {
   const [inputRoomCode, setInputRoomCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
-  // Validation helpers
-  const validatePlayerName = () => {
-    const trimmedName = playerNameInput.trim();
-    if (!trimmedName) {
-      Alert.alert('Name Required', 'Please enter your name before continuing');
-      return false;
-    }
-    return true;
+  // Update room code with auto-formatting
+  const updateRoomCode = (text) => {
+    // Keep only digits and limit to 4 characters
+    const cleaned = text.replace(/[^0-9]/g, '').substring(0, 4);
+    setInputRoomCode(cleaned);
   };
 
-  const validateRoomCode = () => {
-    const trimmedCode = inputRoomCode.trim();
-    if (!trimmedCode) {
-      Alert.alert('Room Code Required', 'Please enter the 4-digit room code');
-      return false;
-    }
-    if (trimmedCode.length !== 4) {
-      Alert.alert('Invalid Room Code', 'Room code must be exactly 4 digits');
-      return false;
-    }
-    return true;
-  };
-
-  // Create game action
-  const handleCreateGame = async (onCreateRoom) => {
-    if (!validatePlayerName()) return;
-
-    Keyboard.dismiss();
+  // Handle create game
+  const handleCreateGame = async (onCreateRoom, playerName) => {
     setIsCreating(true);
-
+    
     try {
-      await onCreateRoom(playerNameInput.trim());
+      await onCreateRoom(playerName);
     } catch (error) {
-      console.error('Create game error:', error);
-      Alert.alert('Connection Error', 'Failed to create game. Please check your connection and try again.');
+      Alert.alert('Error', error.message || 'Failed to create room. Please try again.');
     } finally {
       setIsCreating(false);
     }
   };
 
-  // Join game action
-  const handleJoinGame = async (onJoinRoom) => {
-    if (!validatePlayerName() || !validateRoomCode()) return;
+  // Handle join game
+  const handleJoinGame = async (onJoinRoom, playerName) => {
+    if (!inputRoomCode || inputRoomCode.length !== 4) {
+      Alert.alert('Invalid Room Code', 'Please enter a 4-digit room code.');
+      return;
+    }
 
-    Keyboard.dismiss();
     setIsJoining(true);
-
+    
     try {
-      await onJoinRoom(inputRoomCode.trim().toUpperCase(), playerNameInput.trim());
+      await onJoinRoom(inputRoomCode, playerName); 
+      setInputRoomCode('');
     } catch (error) {
-      console.error('Join game error:', error);
-      Alert.alert('Connection Error', 'Failed to join game. Please check the room code and try again.');
+      Alert.alert('Error', error.message || 'Failed to join room. Please check the room code and try again.');
     } finally {
       setIsJoining(false);
     }
   };
 
-  // Update room code with formatting and validation
-  const updateRoomCode = (text) => {
-    // Only allow numeric input and limit to 4 characters
-    const numericText = text.replace(/[^0-9]/g, '').slice(0, 4);
-    setInputRoomCode(numericText.toUpperCase());
-  };
-
-  // Reset form state
-  const resetForm = () => {
-    setInputRoomCode('');
-    setIsCreating(false);
-    setIsJoining(false);
-  };
-
-  // Clear all form data
-  const clearAll = () => {
-    setPlayerNameInput('');
-    setInputRoomCode('');
-    setIsCreating(false);
-    setIsJoining(false);
-  };
-
   return {
-    // State
-    playerNameInput,
     inputRoomCode,
+    updateRoomCode,
     isCreating,
     isJoining,
-    
-    // Actions
-    setPlayerNameInput,
-    updateRoomCode,
     handleCreateGame,
     handleJoinGame,
-    resetForm,
-    clearAll,
-    
-    // Validation
-    validatePlayerName,
-    validateRoomCode
   };
 };

@@ -1,30 +1,31 @@
 import {
-  Text,
   TouchableOpacity,
+  Text,
   StyleSheet,
   ActivityIndicator,
+  View,
 } from 'react-native';
 import LobbyCard from './LobbyCard';
 
-const CreateGameForm = ({ 
-  isCreating, 
-  onCreateGame 
-}) => {
+const CreateGameForm = ({ isCreating, onCreateGame }) => {
   return (
-    <LobbyCard>
+    <LobbyCard style={styles.container}>
       <TouchableOpacity
-        style={[styles.button, isCreating && styles.buttonDisabled]}
+        style={[
+          styles.createButton,
+          isCreating && styles.createButtonDisabled
+        ]}
         onPress={onCreateGame}
         disabled={isCreating}
         activeOpacity={0.7}
       >
         {isCreating ? (
-          <>
-            <ActivityIndicator size="small" color="#666666" style={styles.spinner} />
-            <Text style={styles.buttonText}>Creating...</Text>
-          </>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#FFFBF2" />
+            <Text style={styles.createButtonText}>Creating...</Text>
+          </View>
         ) : (
-          <Text style={styles.buttonText}>Create New Game</Text>
+          <Text style={styles.createButtonText}>Create Game</Text>
         )}
       </TouchableOpacity>
     </LobbyCard>
@@ -32,17 +33,14 @@ const CreateGameForm = ({
 };
 
 const styles = StyleSheet.create({
-  button: {
-    backgroundColor: '#FFFBF2',
+  container: {
+    marginBottom: 16,
+  },
+  createButton: {
+    backgroundColor: '#8B4513',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#D9A93D',
-    flexDirection: 'row',
+    paddingVertical: 16,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -50,18 +48,20 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
-  buttonDisabled: {
+  createButtonDisabled: {
+    backgroundColor: '#B8860B',
     opacity: 0.6,
   },
-  buttonText: {
+  createButtonText: {
+    color: '#FFFBF2',
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333333',
+    fontWeight: 'bold',
   },
-  spinner: {
-    marginRight: 8,
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
 
