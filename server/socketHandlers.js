@@ -241,6 +241,12 @@ socket.on('authenticate-user', (data, callback) => {
             });
           }
           
+      console.log('🔍 DEBUGGING RECORD NOTIFICATIONS:');
+      console.log('  - roundResult.recordsUpdated exists:', !!roundResult.recordsUpdated);
+      console.log('  - roundResult.recordsUpdated:', JSON.stringify(roundResult.recordsUpdated, null, 2));
+      console.log('  - roundResultsData.recordNotifications:', JSON.stringify(roundResultsData.recordNotifications, null, 2));
+      console.log('  - Object.keys(game.players):', Object.keys(game.players));
+
           io.to(roomCode).emit('round-ended', roundResultsData);
 
           // Check if game is finished after this round

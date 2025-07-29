@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,14 @@ import socketService from '../services/socketService';
 import WordsComparison from '../components/WordsComparison';
 import RecordNotification from '../components/RecordNotification';
 
-const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
+const ResultsScreen = ({ roundResult, gameState, onPlayerReady, onShowFinalResults }) => {
   const [isReady, setIsReady] = useState(false);
   const [recordNotifications, setRecordNotifications] = useState([]);
   const slideAnim = new Animated.Value(0);
+  
+  // Toast animation for opponent ready notification
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const [showToast, setShowToast] = useState(false);
 
   // Identify current player - try multiple approaches for robustness
   const getCurrentPlayerName = () => {
@@ -132,6 +136,43 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
     };
   }, [roundResult]);
 
+  // Get opponent ready status
+  const getOpponentReadyStatus = () => {
+    if (!gameState?.players) return false;
+    
+    const opponent = gameState.players.find(p => p.name === opponentName);
+    return opponent?.ready || false;
+  };
+
+  const opponentIsReady = getOpponentReadyStatus();
+
+  // Handle opponent ready toast
+  useEffect(() => {
+    if (opponentIsReady && !isReady && !showToast) {
+      setShowToast(true);
+      
+      // Animate in
+      Animated.timing(toastAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+
+      // Auto-hide after 3 seconds
+      const timer = setTimeout(() => {
+        Animated.timing(toastAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => {
+          setShowToast(false);
+        });
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [opponentIsReady, isReady, showToast, toastAnim]);
+
   const handleReady = async () => {
     try {
       setIsReady(true);
@@ -163,15 +204,17 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
     ? 'Continue to Final Results' 
     : `Ready for Round ${gameState.currentRound + 1}`;
 
-  // Get opponent ready status
-  const getOpponentReadyStatus = () => {
-    if (!gameState?.players) return false;
-    
-    const opponent = gameState.players.find(p => p.name === opponentName);
-    return opponent?.ready || false;
+  const handleButtonPress = () => {
+    if (isLastRound) {
+      // Navigate to final results - no server communication
+      if (onShowFinalResults) {
+        onShowFinalResults();
+      }
+    } else {
+      // Normal round progression
+      handleReady();
+    }
   };
-
-  const opponentIsReady = getOpponentReadyStatus();
 
   return (
     <KeyboardAvoidingView 
@@ -182,6 +225,28 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
         records={recordNotifications}
         onDismiss={dismissRecordNotifications}
       />
+
+      {/* Floating Toast for Opponent Ready */}
+      {showToast && (
+        <Animated.View 
+          style={[
+            styles.toastContainer,
+            {
+              opacity: toastAnim,
+              transform: [{
+                translateY: toastAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              }],
+            },
+          ]}
+        >
+          <Text style={styles.toastText}>
+            {opponentName} is ready!
+          </Text>
+        </Animated.View>
+      )}
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -205,39 +270,46 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
           <Text style={styles.title}>
             Round {roundResult.round} Results
           </Text>
-          
-          {isRoundTie ? (
-            <Text style={styles.tieText}>It's a tie!</Text>
-          ) : (
-            <Text style={styles.winnerText}>
-              {isCurrentRoundWinner ? 'You won this round!' : `${opponentName} won this round!`}
-            </Text>
-          )}
 
-          {/* Simplified Score Display */}
+          {/* Score Display with Winner Emoji */}
           <View style={styles.simpleScoreDisplay}>
             <View style={styles.scoreColumn}>
               <Text style={styles.playerScoreName}>{currentPlayerName}</Text>
-              <Text style={[
-                styles.playerScoreValue,
-                isCurrentRoundWinner && !isRoundTie && styles.winnerScoreValue
-              ]}>
-                {currentPlayerData.roundScore}
-              </Text>
+              <View style={styles.scoreRow}>
+                <Text style={[
+                  styles.playerScoreValue,
+                  isCurrentRoundWinner && !isRoundTie && styles.winnerScoreValue
+                ]}>
+                  {currentPlayerData.roundScore}
+                </Text>
+                {isCurrentRoundWinner && !isRoundTie && (
+                  <Text style={styles.winnerEmoji}>👑</Text>
+                )}
+              </View>
             </View>
             
             <Text style={styles.vsText}>VS</Text>
             
             <View style={styles.scoreColumn}>
               <Text style={styles.playerScoreName}>{opponentName}</Text>
-              <Text style={[
-                styles.playerScoreValue,
-                !isCurrentRoundWinner && !isRoundTie && styles.winnerScoreValue
-              ]}>
-                {opponentData.roundScore}
-              </Text>
+              <View style={styles.scoreRow}>
+                <Text style={[
+                  styles.playerScoreValue,
+                  !isCurrentRoundWinner && !isRoundTie && styles.winnerScoreValue
+                ]}>
+                  {opponentData.roundScore}
+                </Text>
+                {!isCurrentRoundWinner && !isRoundTie && (
+                  <Text style={styles.winnerEmoji}>👑</Text>
+                )}
+              </View>
             </View>
           </View>
+
+          {/* Tie indicator */}
+          {isRoundTie && (
+            <Text style={styles.tieText}>🤝 It's a tie!</Text>
+          )}
         </Animated.View>
 
         {/* Detailed Word Lists */}
@@ -262,19 +334,10 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady }) => {
           />
         </Animated.View>
 
-        {/* Ready Status */}
-        {opponentIsReady && !isReady && (
-          <View style={styles.opponentReadyMessage}>
-            <Text style={styles.opponentReadyText}>
-              {opponentName} is ready!
-            </Text>
-          </View>
-        )}
-
         {/* Ready Button */}
         <TouchableOpacity
           style={[styles.readyButton, isReady && styles.readyButtonPressed]}
-          onPress={handleReady}
+          onPress={handleButtonPress}
           disabled={isReady}
           activeOpacity={0.8}
         >
@@ -313,19 +376,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#2E2E2E',
-    marginBottom: 8,
-  },
-  winnerText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#8B4513',
     marginBottom: 20,
   },
   tieText: {
     fontSize: 18,
     fontWeight: '600',
     color: '#D9A93D',
-    marginBottom: 20,
+    marginTop: 10,
   },
   simpleScoreDisplay: {
     flexDirection: 'row',
@@ -350,6 +407,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 80,
   },
+  scoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   playerScoreName: {
     fontSize: 14,
     fontWeight: '600',
@@ -364,6 +426,10 @@ const styles = StyleSheet.create({
   winnerScoreValue: {
     color: '#8B4513',
   },
+  winnerEmoji: {
+    fontSize: 24,
+    marginLeft: 8,
+  },
   vsText: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -372,21 +438,6 @@ const styles = StyleSheet.create({
   },
   wordsSection: {
     marginBottom: 20,
-  },
-  opponentReadyMessage: {
-    backgroundColor: '#E8F5E8',
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#4CAF50',
-  },
-  opponentReadyText: {
-    fontSize: 16,
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: '500',
   },
   readyButton: {
     backgroundColor: '#8B4513',
@@ -417,6 +468,31 @@ const styles = StyleSheet.create({
   },
   readyButtonTextPressed: {
     color: '#CCCCCC',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 80,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

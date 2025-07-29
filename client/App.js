@@ -1,7 +1,7 @@
-import { StyleSheet, View, Animated, Dimensions } from 'react-native';
+import { StyleSheet, View, Animated, Dimensions, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 // Import custom hooks
 import { useAuth } from './hooks/useAuth';
@@ -15,6 +15,9 @@ import ResultsScreen from './screens/ResultsScreen';
 import FinalResultsScreen from './screens/FinalResultsScreen';
 import CountdownScreen from './screens/CountdownScreen';
 import PracticeScreen from './screens/PracticeScreen';
+
+// Import socket service for reconnection
+import socketService from './services/socketService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -51,9 +54,61 @@ export default function App() {
     handlePlayerReady,
     handleSubmitRoundResults,
     handleNextRound,
+    handleShowFinalResults,
     handlePlayAgain,
     handleBackToLobby
   } = useGameFlow(user);
+
+  // Handle app state changes for socket reconnection
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState) => {
+      console.log(`📱 App state changed to: ${nextAppState}`);
+      
+      if (nextAppState === 'active' && user?.username) {
+        console.log('🔄 App became active - checking socket connection...');
+        
+        try {
+          // Check if socket is connected and authenticated
+          if (!socketService.socket?.connected) {
+            console.log('🔌 Socket disconnected - reconnecting...');
+            await socketService.connect();
+          }
+          
+          if (!socketService.isUserAuthenticated()) {
+            console.log('🔐 Re-authenticating user...');
+            await socketService.authenticateUser(user.username);
+            console.log('✅ Re-authentication successful');
+          } else {
+            console.log('✅ Socket already authenticated');
+          }
+        } catch (error) {
+          console.error('❌ App state reconnection failed:', error.message);
+          // Don't show alert here - let the user try to take action first
+          // If they try to create/join a room, the existing error handling will catch it
+        }
+      }
+    };
+
+    // Set up app state listener
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Cleanup listener on unmount
+    return () => {
+      subscription?.remove();
+    };
+  }, [user]);
+
+  // Local handler to navigate to final results using existing function
+  const handleShowFinalResultsLocal = () => {
+    console.log('📊 Navigating to final results screen locally');
+    if (gameState?.finalResults) {
+      // Use the existing handleShowFinalResults with local data
+      handleShowFinalResults({
+        gameState: gameState,
+        finalResults: gameState.finalResults
+      });
+    }
+  };
 
   // Slide to new screen
   const slideToScreen = (callback) => {
@@ -184,6 +239,7 @@ export default function App() {
             roundResult={roundResults}
             gameState={gameState}
             onPlayerReady={handleNextRound}
+            onShowFinalResults={handleShowFinalResultsLocal}
             playerName={user.displayName}
           />
         );

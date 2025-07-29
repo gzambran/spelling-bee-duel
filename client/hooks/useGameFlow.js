@@ -335,6 +335,7 @@ const handleJoinRoom = async (roomCode, playerName) => {
     handlePlayerReady,
     handleSubmitRoundResults,
     handleNextRound,
+    handleShowFinalResults,
     handlePlayAgain,
     handleBackToLobby
   };

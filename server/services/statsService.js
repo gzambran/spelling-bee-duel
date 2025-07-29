@@ -136,6 +136,8 @@ class StatsService {
    */
   async updatePlayerGameStats(playerId, gameOutcome) {
     try {
+          console.log(`🔍 BEFORE updating player ${playerId} game stats (${gameOutcome}):`);
+      
       let updateSql;
       switch (gameOutcome) {
         case 'win':

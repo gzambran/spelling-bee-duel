@@ -10,23 +10,25 @@ const CountdownScreen = ({ countdown, nextRound, isPracticeMode = false }) => {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Animate countdown number
+  // Animate countdown number (only when countdown > 0)
   useEffect(() => {
-    // Reset and animate the countdown number
-    scaleAnim.setValue(0);
-    
-    Animated.sequence([
-      Animated.timing(scaleAnim, {
-        toValue: 1.2,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scaleAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    if (countdown > 0) {
+      // Reset and animate the countdown number
+      scaleAnim.setValue(0);
+      
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.2,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
   }, [countdown, scaleAnim]);
 
   // Fade in the screen on mount
@@ -52,20 +54,23 @@ const CountdownScreen = ({ countdown, nextRound, isPracticeMode = false }) => {
           </Text>
         </View>
         
-        <Animated.Text 
-          style={[
-            styles.countdownText, 
-            { 
-              transform: [{ scale: scaleAnim }],
-              color: '#2E2E2E'
-            }
-          ]}
-        >
-          {countdown > 0 ? countdown : 'GO!'}
-        </Animated.Text>
+        {/* Only show countdown number when > 0 */}
+        {countdown > 0 && (
+          <Animated.Text 
+            style={[
+              styles.countdownText, 
+              { 
+                transform: [{ scale: scaleAnim }],
+                color: '#2E2E2E'
+              }
+            ]}
+          >
+            {countdown}
+          </Animated.Text>
+        )}
         
         <Text style={readyTextStyle}>
-          {countdown > 0 ? 'Get Ready!' : 'Start Finding Words!'}
+          Get Ready!
         </Text>
       </View>
     </Animated.View>

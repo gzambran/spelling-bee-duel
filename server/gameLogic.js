@@ -145,8 +145,8 @@ class GameLogic {
           roomCode: game.roomCode,
           player1Id: players[0].userId,
           player2Id: players[1].userId,
-          winnerId: null, // Will be set when game finishes
-          player1Score: 0, // Will be updated when game finishes  
+          winnerId: null,
+          player1Score: 0,
           player2Score: 0,
           player1Name: players[0].name,
           player2Name: players[1].name
