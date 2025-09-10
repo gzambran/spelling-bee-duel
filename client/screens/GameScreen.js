@@ -39,15 +39,9 @@ const GameScreen = ({ gameState, onSubmitRoundResults, playerName, timeRemaining
 
   const {
     currentWord,
-    selectedLetters,
-    isSubmitting,
     handleLetterPress,
     handleDeleteLetter,
     clearCurrentWord,
-    setIsSubmitting,
-    canSubmit,
-    canDelete,
-    canInteract
   } = useWordInput(gameState, timeRemaining, clearSubmissionDisplay);
   
   const { validateWord } = useWordValidation(puzzleData, submittedWords);
@@ -59,30 +53,30 @@ const GameScreen = ({ gameState, onSubmitRoundResults, playerName, timeRemaining
     }
   }, [hasSubmittedResults, showSubmission]);
 
-  // Handle word submission with client-side validation
+  // Handle word submission with all validation moved here
   const handleSubmitWord = useCallback(() => {
+    // Handle empty/short words
     if (!currentWord || currentWord.length < 4) {
       showSubmission(currentWord, false, 0, false, 'Word must be at least 4 letters');
       clearCurrentWord();
       return;
     }
 
+    // Handle inactive round
     if (gameState?.roundStatus !== 'active') {
       showSubmission(currentWord, false, 0, false, 'Round is not active');
       clearCurrentWord();
       return;
     }
 
+    // Handle time expiration
     if (timeRemaining <= 0) {
       showSubmission(currentWord, false, 0, false, 'Time\'s up!');
       clearCurrentWord();
       return;
     }
 
-    if (isSubmitting) return; // Prevent double submission
-
     const wordToSubmit = currentWord;
-    setIsSubmitting(true);
 
     // Use client-side validation
     const validation = validateWord(wordToSubmit);
@@ -100,9 +94,7 @@ const GameScreen = ({ gameState, onSubmitRoundResults, playerName, timeRemaining
       // Show unified error display
       showSubmission(wordToSubmit, false, 0, false, validation.error);
     }
-    
-    setIsSubmitting(false);
-  }, [currentWord, gameState?.roundStatus, timeRemaining, isSubmitting, validateWord, clearCurrentWord, addSubmittedWord, showSubmission, setIsSubmitting]);
+  }, [currentWord, gameState?.roundStatus, timeRemaining, validateWord, clearCurrentWord, addSubmittedWord, showSubmission]);
 
   if (!gameState || !gameState.puzzle) {
     return (
@@ -139,23 +131,23 @@ const GameScreen = ({ gameState, onSubmitRoundResults, playerName, timeRemaining
         scaleAnim={scaleAnim}
       />
 
-      {/* Letter Hexagon */}
+      {/* Letter Hexagon - Always interactive */}
       <LetterHexagon
         centerLetter={centerLetter}
         outerLetters={outerLetters}
         onLetterPress={handleLetterPress}
-        canInteract={canInteract}
+        canInteract={true} // Always allow interaction
       />
 
-      {/* Action Buttons */}
+      {/* Action Buttons - Always enabled, validation happens in handlers */}
       <GameActions
         onDeleteLetter={handleDeleteLetter}
         onShuffleLetter={handleShuffleLetters}
         onSubmitWord={handleSubmitWord}
-        canDelete={canDelete}
-        canInteract={canInteract}
-        canSubmit={canSubmit}
-        isSubmitting={isSubmitting}
+        canDelete={true} // Always enabled
+        canInteract={true} // Always enabled
+        canSubmit={true} // Always enabled
+        isSubmitting={false} // No longer tracking this
       />
     </View>
   );

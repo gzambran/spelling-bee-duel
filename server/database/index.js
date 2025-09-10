@@ -8,7 +8,7 @@ const GameRepository = require('./gameRepository');
 class DatabaseManager {
   constructor() {
     this.db = null;
-    this.dbPath = path.join(__dirname, 'db', 'game.db');
+    this.dbPath = path.join('/app', 'db', 'game.db');
     
     // Initialize repositories
     this.users = null;

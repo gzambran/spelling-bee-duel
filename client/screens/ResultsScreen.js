@@ -78,6 +78,23 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady, onShowFinalResul
 
   const { currentPlayerData, opponentData, currentPlayerName, opponentName } = getPlayerData();
 
+  // Get running totals for players (used in Round 2)
+  const getPlayerTotals = () => {
+    if (!gameState?.players) {
+      return { currentPlayerTotal: 0, opponentTotal: 0 };
+    }
+    
+    const currentPlayer = gameState.players.find(p => p.name === currentPlayerName);
+    const opponent = gameState.players.find(p => p.name === opponentName);
+    
+    return {
+      currentPlayerTotal: currentPlayer?.totalScore || 0,
+      opponentTotal: opponent?.totalScore || 0
+    };
+  };
+
+  const { currentPlayerTotal, opponentTotal } = getPlayerTotals();
+
   // Calculate round winner status
   const getRoundWinnerStatus = () => {
     if (!currentPlayerData || !opponentData) {
@@ -216,6 +233,9 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady, onShowFinalResul
     }
   };
 
+  // Check if we should show running totals (Round 2 only)
+  const shouldShowRunningTotals = roundResult.round === 2;
+
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -286,6 +306,12 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady, onShowFinalResul
                   <Text style={styles.winnerEmoji}>👑</Text>
                 )}
               </View>
+              {/* Show running total for Round 2 only */}
+              {shouldShowRunningTotals && (
+                <Text style={styles.runningTotalText}>
+                  (Total: {currentPlayerTotal})
+                </Text>
+              )}
             </View>
             
             <Text style={styles.vsText}>VS</Text>
@@ -303,6 +329,12 @@ const ResultsScreen = ({ roundResult, gameState, onPlayerReady, onShowFinalResul
                   <Text style={styles.winnerEmoji}>👑</Text>
                 )}
               </View>
+              {/* Show running total for Round 2 only */}
+              {shouldShowRunningTotals && (
+                <Text style={styles.runningTotalText}>
+                  (Total: {opponentTotal})
+                </Text>
+              )}
             </View>
           </View>
 
@@ -429,6 +461,12 @@ const styles = StyleSheet.create({
   winnerEmoji: {
     fontSize: 24,
     marginLeft: 8,
+  },
+  runningTotalText: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 6,
+    fontWeight: '500',
   },
   vsText: {
     fontSize: 18,

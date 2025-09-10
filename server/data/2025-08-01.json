@@ -1,0 +1,60 @@
+{
+  "displayWeekday": "Friday",
+  "displayDate": "August 1, 2025",
+  "printDate": "2025-08-01",
+  "centerLetter": "n",
+  "outerLetters": [
+    "a",
+    "c",
+    "e",
+    "h",
+    "k",
+    "m"
+  ],
+  "validLetters": [
+    "n",
+    "a",
+    "c",
+    "e",
+    "h",
+    "k",
+    "m"
+  ],
+  "pangrams": [
+    "namecheck"
+  ],
+  "answers": [
+    "namecheck",
+    "acne",
+    "amen",
+    "ankh",
+    "cancan",
+    "cane",
+    "canna",
+    "chance",
+    "enema",
+    "enhance",
+    "hank",
+    "hence",
+    "henchman",
+    "henchmen",
+    "henna",
+    "keen",
+    "khan",
+    "knack",
+    "knee",
+    "mane",
+    "manna",
+    "mean",
+    "menace",
+    "naan",
+    "name",
+    "nana",
+    "nankeen",
+    "neck",
+    "nene"
+  ],
+  "id": 20931,
+  "freeExpiration": 0,
+  "editor": "Sam Ezersky"
+}

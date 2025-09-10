@@ -1,0 +1,49 @@
+{
+  "displayWeekday": "Tuesday",
+  "displayDate": "August 5, 2025",
+  "printDate": "2025-08-05",
+  "centerLetter": "n",
+  "outerLetters": [
+    "p",
+    "u",
+    "b",
+    "i",
+    "k",
+    "m"
+  ],
+  "validLetters": [
+    "n",
+    "p",
+    "u",
+    "b",
+    "i",
+    "k",
+    "m"
+  ],
+  "pangrams": [
+    "bumpkin"
+  ],
+  "answers": [
+    "bumpkin",
+    "bikini",
+    "bunk",
+    "kink",
+    "mini",
+    "minim",
+    "minimum",
+    "mink",
+    "nimbi",
+    "nubbin",
+    "numb",
+    "pink",
+    "pinup",
+    "pippin",
+    "pumpkin",
+    "punk",
+    "unkink",
+    "unpin"
+  ],
+  "id": 27682,
+  "freeExpiration": 0,
+  "editor": "Sam Ezersky"
+}
