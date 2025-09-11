@@ -1,18 +1,22 @@
 {
   "cli": {
     "version": ">= 16.17.3",
-    "appVersionSource": "remote"
+    "appVersionSource": "remote",
+    "requireCommit": false
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "24.3.0"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal", 
+      "node": "24.3.0"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "24.3.0"
     }
   },
   "submit": {
