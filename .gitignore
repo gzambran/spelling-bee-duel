@@ -46,3 +46,4 @@ pids
 server/data/
 
 server/db/game.db
+scripts/
