@@ -44,3 +44,5 @@ pids
 
 # Puzzle data
 server/data/
+
+server/db/game.db
