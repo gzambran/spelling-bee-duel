@@ -11,5 +11,5 @@ services:
       - NODE_ENV=production
       - PORT=3000
     volumes:
-      - ./server/data:/app/data:ro
+      - /opt/data/spelling-bee-puzzles/data:/app/data:ro
       - ./server/db:/app/db
