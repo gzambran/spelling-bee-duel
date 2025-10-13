@@ -1,7 +1,15 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 
 export const useWordValidation = (puzzleData, submittedWords) => {
-  // Client-side word validation function
+  // Use ref to avoid recreating validateWord function on every submission
+  const submittedWordsRef = useRef(submittedWords);
+  
+  // Keep ref in sync with current submittedWords
+  useEffect(() => {
+    submittedWordsRef.current = submittedWords;
+  }, [submittedWords]);
+
+  // Client-side word validation function - now stable!
   const validateWord = useCallback((word) => {
     if (!puzzleData || !word) {
       return { valid: false, error: "Invalid puzzle data" };
@@ -38,8 +46,8 @@ export const useWordValidation = (puzzleData, submittedWords) => {
       return { valid: false, error: "Not in word list" };
     }
     
-    // Check if already submitted
-    if (submittedWords.some(w => w.word === wordLower)) {
+    // Check if already submitted - using ref instead of dependency
+    if (submittedWordsRef.current.some(w => w.word === wordLower)) {
       return { valid: false, error: "Already found!" };
     }
     
@@ -52,7 +60,7 @@ export const useWordValidation = (puzzleData, submittedWords) => {
       points,
       isPangram
     };
-  }, [puzzleData, submittedWords]);
+  }, [puzzleData]); // Only depends on puzzleData, not submittedWords!
 
   return {
     validateWord

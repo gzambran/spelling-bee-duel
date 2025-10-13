@@ -5,11 +5,12 @@ class SocketService {
     this.socket = null;
     this.serverUrl = 'https://duel.zambrano.nyc';
     this.eventListeners = new Map();
-    this.authenticatedUser = null; // Store authenticated user data
+    this.authenticatedUser = null;
     this.isAuthenticated = false;
+    // NEW: Track ongoing authentication to prevent race conditions
+    this.authenticationPromise = null;
   }
 
-  // Connect to the server
   connect() {
     if (this.socket) {
       return Promise.resolve();
@@ -40,7 +41,7 @@ class SocketService {
             })
             .catch((error) => {
               console.warn('⚠️ Re-authentication failed:', error.message);
-              resolve(); // Still resolve to allow connection
+              resolve();
             });
         } else {
           resolve();
@@ -55,22 +56,20 @@ class SocketService {
       this.socket.on('disconnect', (reason) => {
         console.log('📴 Disconnected from server:', reason);
         this.isAuthenticated = false;
-        // Let socket.io handle reconnection automatically
       });
     });
   }
 
-  // Disconnect from server
   disconnect() {
     if (this.socket) {
       console.log('🔌 Disconnecting from server...');
       this.socket.disconnect();
       this.socket = null;
       this.isAuthenticated = false;
+      this.authenticationPromise = null;
     }
   }
 
-  // Generic emit with promise-based response and timeout
   emitWithCallback(event, data = {}) {
     return new Promise((resolve, reject) => {
       if (!this.socket) {
@@ -94,39 +93,87 @@ class SocketService {
     });
   }
 
-  // NEW: Authenticate user for stats tracking
   async authenticateUser(username) {
-    try {
-      if (!username) {
-        throw new Error('Username is required for authentication');
-      }
-
-      const response = await this.emitWithCallback('authenticate-user', { username });
-      
-      this.authenticatedUser = { username, userId: response.userId };
-      this.isAuthenticated = true;
-      
-      console.log(`🔐 Authenticated user: ${username} (ID: ${response.userId})`);
-      return response;
-    } catch (error) {
-      this.isAuthenticated = false;
-      this.authenticatedUser = null;
-      console.error('❌ Authentication failed:', error.message);
-      throw error;
+    // If authentication is already in progress, wait for it
+    if (this.authenticationPromise) {
+      console.log('⏳ Authentication already in progress, waiting...');
+      return this.authenticationPromise;
     }
+
+    // Create new authentication promise
+    this.authenticationPromise = (async () => {
+      try {
+        if (!username) {
+          throw new Error('Username is required for authentication');
+        }
+
+        // Ensure socket is connected
+        if (!this.socket?.connected) {
+          console.log('🔌 Socket not connected, connecting first...');
+          await this.connect();
+        }
+
+        const response = await this.emitWithCallback('authenticate-user', { username });
+        
+        this.authenticatedUser = { username, userId: response.userId };
+        this.isAuthenticated = true;
+        
+        console.log(`🔐 Authenticated user: ${username} (ID: ${response.userId})`);
+        return response;
+      } catch (error) {
+        this.isAuthenticated = false;
+        console.error('❌ Authentication failed:', error.message);
+        throw error;
+      } finally {
+        // Clear the promise after completion (success or failure)
+        this.authenticationPromise = null;
+      }
+    })();
+
+    return this.authenticationPromise;
   }
 
-  // NEW: Get authenticated user info
+  // NEW: Ensure user is authenticated, with retry logic
+  async ensureAuthenticated(username, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // If already authenticated, return immediately
+        if (this.isAuthenticated && this.authenticatedUser) {
+          console.log('✅ Already authenticated');
+          return true;
+        }
+
+        console.log(`🔐 Authentication attempt ${attempt}/${maxRetries}...`);
+        
+        // Try to authenticate
+        await this.authenticateUser(username);
+        return true;
+      } catch (error) {
+        console.warn(`⚠️ Authentication attempt ${attempt} failed:`, error.message);
+        
+        // If this was the last attempt, throw the error
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        
+        // Wait before retrying (exponential backoff)
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        console.log(`⏳ Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    return false;
+  }
+
   getAuthenticatedUser() {
     return this.authenticatedUser;
   }
 
-  // NEW: Check if user is authenticated
   isUserAuthenticated() {
     return this.isAuthenticated && this.authenticatedUser !== null;
   }
 
-  // Room management methods
   async createRoom(playerName) {
     const response = await this.emitWithCallback('create-room', { playerName });
     console.log('🏠 Room created:', response.roomCode);
@@ -139,21 +186,18 @@ class SocketService {
     return response;
   }
 
-  // Game control methods
   async setPlayerReady(ready = true) {
     const response = await this.emitWithCallback('player-ready', { ready });
     console.log('✅ Player ready status set:', ready);
     return response;
   }
 
-  // Submit complete round results to server
   async submitRoundResults(words, totalScore) {
     const response = await this.emitWithCallback('submit-round-results', { words, totalScore });
     console.log('📊 Round results submitted:', words.length, 'words,', totalScore, 'points');
     return response;
   }
 
-  // NEW: Stats API methods using fetch for REST endpoints
   async fetchPersonalStats(userId) {
     try {
       const response = await fetch(`${this.serverUrl}/api/stats/personal/${userId}`);
@@ -222,7 +266,6 @@ class SocketService {
     }
   }
 
-  // NEW: Combined method to get all stats for a user
   async fetchAllUserStats(userId) {
     try {
       const [personalStats, headToHeadStats] = await Promise.all([
@@ -241,10 +284,8 @@ class SocketService {
     }
   }
 
-  // NEW: Login with authentication (combines HTTP login + socket auth)
   async loginAndAuthenticate(username) {
     try {
-      // First, login via HTTP to get user data
       const loginResponse = await fetch(`${this.serverUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -259,7 +300,6 @@ class SocketService {
         throw new Error(loginData.error || 'Login failed');
       }
 
-      // Then authenticate via socket for stats tracking
       if (this.socket) {
         await this.authenticateUser(username);
       }
@@ -272,20 +312,17 @@ class SocketService {
     }
   }
 
-  // NEW: Validate stored user session
   async validateStoredUser(username) {
     try {
       const response = await fetch(`${this.serverUrl}/api/auth/validate/${username}`);
       const data = await response.json();
       
       if (data.success) {
-        // Also authenticate via socket if connected
         if (this.socket) {
           try {
             await this.authenticateUser(username);
           } catch (authError) {
             console.warn('⚠️ Socket authentication failed during validation:', authError.message);
-            // Don't fail the entire validation if socket auth fails
           }
         }
         
@@ -300,7 +337,6 @@ class SocketService {
     }
   }
 
-  // Event listener management
   on(event, callback) {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, []);
@@ -308,7 +344,6 @@ class SocketService {
     
     this.eventListeners.get(event).push(callback);
 
-    // If socket exists, set up the listener immediately
     if (this.socket) {
       this.socket.on(event, callback);
     }
@@ -323,20 +358,16 @@ class SocketService {
       }
     }
 
-    // Remove from socket if it exists
     if (this.socket) {
       this.socket.off(event, callback);
     }
   }
 
-  // Set up all stored event listeners when socket connects/reconnects
   setupEventListeners() {
     if (!this.socket) return;
 
-    // CRITICAL FIX: Remove all existing listeners first to prevent duplicates
     this.socket.removeAllListeners();
 
-    // Set up all stored event listeners
     for (const [event, callbacks] of this.eventListeners.entries()) {
       callbacks.forEach(callback => {
         this.socket.on(event, callback);
@@ -347,13 +378,11 @@ class SocketService {
   }
 
   setupRecordNotificationHandlers() {
-    // Listen for round-ended events with record notifications
     this.on('round-ended', (data) => {
       if (data.recordNotifications && this.authenticatedUser) {
         const myRecords = data.recordNotifications[this.socket?.id];
         if (myRecords && myRecords.roundRecords.length > 0) {
           console.log('🎉 Round records broken:', myRecords.roundRecords);
-          // Emit custom event for UI to handle
           this.emit('records-broken', {
             type: 'round',
             records: myRecords.roundRecords,
@@ -363,13 +392,11 @@ class SocketService {
       }
     });
 
-    // Listen for final results with record notifications
     this.on('show-final-results', (data) => {
       if (data.recordNotifications && this.authenticatedUser) {
         const myRecords = data.recordNotifications[this.socket?.id];
         if (myRecords && myRecords.gameRecords.length > 0) {
           console.log('🎉 Game records broken:', myRecords.gameRecords);
-          // Emit custom event for UI to handle
           this.emit('records-broken', {
             type: 'game',
             records: myRecords.gameRecords,
@@ -399,7 +426,6 @@ class SocketService {
   }
 }
 
-// Create singleton instance
 const socketService = new SocketService();
 
 export default socketService;

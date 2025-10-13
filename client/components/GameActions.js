@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   View,
   Text,
@@ -121,4 +122,5 @@ const styles = StyleSheet.create({
   },
 });
 
-export default GameActions;
+// Memoize to prevent unnecessary re-renders
+export default React.memo(GameActions);

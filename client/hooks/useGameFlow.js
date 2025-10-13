@@ -49,7 +49,6 @@ export const useGameFlow = (user) => {
     console.log('🔄 Game restarted by server - updating state');
     setGameState(data.gameState);
     
-    // Reset any local state that might interfere with new game
     setRoundResults(null);
     setFinalResults(null);
     setServerTimeRemaining(90);
@@ -61,7 +60,6 @@ export const useGameFlow = (user) => {
     setNextRound(data.nextRound);
     setCurrentScreen('countdown');
     
-    // Update countdown every second
     let currentCount = data.countdown;
     const timer = setInterval(() => {
       currentCount--;
@@ -162,87 +160,67 @@ export const useGameFlow = (user) => {
     setServerTimeRemaining(90);
   };
 
-const handleCreateRoom = async (playerName) => {
-  try {
-    // Ensure socket is connected and authenticated before attempting room creation
-    if (!socketService.isUserAuthenticated()) {
-      console.warn('⚠️ Socket not authenticated, attempting to authenticate...');
-      
-      if (user?.username) {
-        try {
-          await socketService.authenticateUser(user.username);
-          console.log('✅ Socket authentication completed');
-        } catch (authError) {
-          console.error('❌ Socket authentication failed:', authError.message);
-          Alert.alert('Authentication Error', 'Authentication failed. Please refresh the app and try again.');
-          return;
-        }
-      } else {
-        console.error('❌ User data missing for authentication');
-        Alert.alert('Error', 'User data missing. Please refresh the app and try again.');
-        return;
+  const handleCreateRoom = async (playerName) => {
+    try {
+      console.log('🏠 Attempting to create room for:', playerName);
+
+      // Check for basic connectivity issues first
+      if (!user?.username) {
+        throw new Error('Unable to create room. Please check your connection and try again.');
       }
-    }
 
-    console.log('🏠 Creating room for:', playerName);
-    const result = await socketService.createRoom(playerName);
-    
-    setRoomCode(result.roomCode);
-    setGameState(result.game);
-    
-    console.log('✅ Room created successfully:', result.roomCode);
-  } catch (error) {
-    console.error('❌ Create room error:', error.message);
-    
-    // Handle authentication-specific errors
-    if (error.message.includes('Authentication required') || error.message.includes('requiresAuth')) {
-      Alert.alert('Authentication Required', 'Authentication required. Please refresh the app and try again.');
-    } else {
-      Alert.alert('Error', `Failed to create room: ${error.message}`);
-    }
-  }
-};
-
-const handleJoinRoom = async (roomCode, playerName) => {
-  try {
-    // Ensure socket is connected and authenticated before attempting room join
-    if (!socketService.isUserAuthenticated()) {
-      console.warn('⚠️ Socket not authenticated, attempting to authenticate...');
-      
-      if (user?.username) {
-        try {
-          await socketService.authenticateUser(user.username);
-          console.log('✅ Socket authentication completed');
-        } catch (authError) {
-          console.error('❌ Socket authentication failed:', authError.message);
-          Alert.alert('Authentication Error', 'Authentication failed. Please refresh the app and try again.');
-          return;
-        }
-      } else {
-        console.error('❌ User data missing for authentication');
-        Alert.alert('Error', 'User data missing. Please refresh the app and try again.');
-        return;
+      // Silently ensure authentication with retries (no alerts)
+      try {
+        await socketService.ensureAuthenticated(user.username, 3);
+      } catch (authError) {
+        // Authentication failed - provide helpful error
+        console.error('❌ Authentication failed:', authError.message);
+        throw new Error('Unable to connect to game server. Please check your internet connection.\n\nYou can still play in Practice Mode!');
       }
-    }
 
-    console.log('🚪 Joining room:', roomCode, 'as', playerName);
-    const result = await socketService.joinRoom(roomCode, playerName);
-    
-    setRoomCode(result.roomCode);
-    setGameState(result.game);
-    
-    console.log('✅ Room joined successfully:', roomCode);
-  } catch (error) {
-    console.error('❌ Join room error:', error.message);
-    
-    // Handle authentication-specific errors
-    if (error.message.includes('Authentication required') || error.message.includes('requiresAuth')) {
-      Alert.alert('Authentication Required', 'Authentication required. Please refresh the app and try again.');
-    } else {
-      Alert.alert('Error', `Failed to join room: ${error.message}`);
+      // Now try to create the room
+      const result = await socketService.createRoom(playerName);
+      
+      setRoomCode(result.roomCode);
+      setGameState(result.game);
+      
+      console.log('✅ Room created successfully:', result.roomCode);
+    } catch (error) {
+      console.error('❌ Create room error:', error.message);
+      throw error; // Let useLobbyForm handle the Alert
     }
-  }
-};
+  };
+
+  const handleJoinRoom = async (roomCode, playerName) => {
+    try {
+      console.log('🚪 Attempting to join room:', roomCode, 'as', playerName);
+
+      // Check for basic connectivity issues first
+      if (!user?.username) {
+        throw new Error('Unable to join room. Please check your connection and try again.');
+      }
+
+      // Silently ensure authentication with retries (no alerts)
+      try {
+        await socketService.ensureAuthenticated(user.username, 3);
+      } catch (authError) {
+        // Authentication failed - provide helpful error
+        console.error('❌ Authentication failed:', authError.message);
+        throw new Error('Unable to connect to game server. Please check your internet connection.\n\nYou can still play in Practice Mode!');
+      }
+
+      // Now try to join the room
+      const result = await socketService.joinRoom(roomCode, playerName);
+      
+      setRoomCode(result.roomCode);
+      setGameState(result.game);
+      
+      console.log('✅ Room joined successfully:', roomCode);
+    } catch (error) {
+      console.error('❌ Join room error:', error.message);
+      throw error; // Let useLobbyForm handle the Alert
+    }
+  };
 
   const handlePlayerReady = async () => {
     try {
@@ -252,7 +230,6 @@ const handleJoinRoom = async (roomCode, playerName) => {
     }
   };
 
-  // Handle round result submission
   const handleSubmitRoundResults = async (words, totalScore) => {
     try {
       console.log('📊 App submitting round results:', words.length, 'words,', totalScore, 'points');
@@ -273,12 +250,10 @@ const handleJoinRoom = async (roomCode, playerName) => {
     }
   };
 
-  // Handle play again
   const handlePlayAgain = async () => {
     try {
       console.log('🔄 Starting new game with same opponent in room:', roomCode);
       
-      // Reset local state for new game but keep room and players
       setRoundResults(null);
       setFinalResults(null);
       setCountdown(3);
@@ -286,7 +261,6 @@ const handleJoinRoom = async (roomCode, playerName) => {
       setServerTimeRemaining(90);
       setCurrentScreen('lobby');
       
-      // Signal server that this player is ready to restart
       await socketService.setPlayerReady(true);
       
     } catch (error) {
@@ -298,22 +272,20 @@ const handleJoinRoom = async (roomCode, playerName) => {
   const handleBackToLobby = () => {
     console.log('🏠 Returning to lobby - disconnecting from current room');
     
-    // Disconnect and return to lobby for new opponents
     socketService.disconnect();
     
-    // Reset all game state
     resetGameState();
     
-    // Reconnect for new game
+    // Silently reconnect in background - don't block if it fails
     setTimeout(() => {
       socketService.connect().then(() => {
         if (user) {
           socketService.authenticateUser(user.username).catch(error => {
-            console.warn('⚠️ Re-authentication failed:', error.message);
+            console.warn('⚠️ Background re-authentication failed (non-blocking):', error.message);
           });
         }
       }).catch(error => {
-        console.error('❌ Failed to reconnect:', error);
+        console.warn('⚠️ Background reconnection failed (non-blocking):', error.message);
       });
     }, 1000);
   };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export const useGameState = (gameState, timeRemaining, onSubmitRoundResults) => {
 
@@ -10,6 +10,9 @@ export const useGameState = (gameState, timeRemaining, onSubmitRoundResults) => 
   const [submissionAttempts, setSubmissionAttempts] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
   const puzzleData = gameState?.puzzle;
+  
+  // Use ref to track if we've already submitted for this round
+  const hasAutoSubmittedRef = useRef(false);
 
   useEffect(() => {
     if (puzzleData) {
@@ -43,17 +46,20 @@ export const useGameState = (gameState, timeRemaining, onSubmitRoundResults) => 
         setHasSubmittedResults(false);
         setSubmissionAttempts(0);
         setIsRetrying(false);
+        hasAutoSubmittedRef.current = false; // Reset auto-submit flag
       }
     }
   }, [gameState?.puzzle?.centerLetter, gameState?.puzzle?.outerLetters, currentPuzzleId]);
 
-  // Auto-submit results when server time expires
+  // OPTIMIZED: Auto-submit results when server time expires
+  // Only runs once when timeRemaining hits 0, not every second
   useEffect(() => {
-    if (timeRemaining === 0 && !hasSubmittedResults && !isRetrying) {
+    if (timeRemaining === 0 && !hasSubmittedResults && !isRetrying && !hasAutoSubmittedRef.current) {
       console.log('⏰ Server time expired - auto-submitting results');
+      hasAutoSubmittedRef.current = true; // Prevent multiple submissions
       handleSubmitResults();
     }
-  }, [timeRemaining, hasSubmittedResults, isRetrying]);
+  }, [timeRemaining]); // Keep this simple - only depend on timeRemaining
 
   const handleSubmitResults = useCallback(async (attemptNumber = 1) => {
     if (hasSubmittedResults) return; // Prevent double submission
@@ -91,8 +97,6 @@ export const useGameState = (gameState, timeRemaining, onSubmitRoundResults) => 
         console.error('🚨 All submission attempts failed! Player will get 0 points.');
         setIsRetrying(false);
         
-        // TODO: Show user notification about submission failure
-        // For now, just log the critical error
         console.error('CRITICAL: Round results could not be submitted after 3 attempts');
         console.error('Player data:', { submittedWords: submittedWords.length, currentScore });
         console.error('Game state:', { 

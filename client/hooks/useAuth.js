@@ -33,41 +33,49 @@ export const useAuth = () => {
       }
     } catch (error) {
       console.error('❌ App initialization error:', error);
+      // Don't fail - let user continue to practice mode
     } finally {
       setIsCheckingAuth(false);
     }
   };
 
-const establishUserSession = async (userData) => {
-  try {
-    console.log('🔄 Setting user state for:', userData.displayName); // ADD THIS
+  const establishUserSession = async (userData) => {
+    // ALWAYS set user state first - this is non-blocking
     setUser(userData);
     setIsLoggedIn(true);
+    console.log('✅ User state set for:', userData.displayName);
     
-    console.log('🔌 Connecting to socket...'); // ADD THIS
-    await socketService.connect();
-    console.log('✅ Socket connected, socket ID:', socketService.socket?.id); // ADD THIS
-    
-    console.log('🔐 Attempting socket authentication for:', userData.username); // ADD THIS
-    const authResult = await socketService.authenticateUser(userData.username);
-    console.log('🔐 Socket auth result:', authResult); // ADD THIS
-    
-    console.log('✅ User session established with socket authentication');
-  } catch (error) {
-    console.error('❌ Socket authentication failed:', error.message);
-    setUser(userData);
-    setIsLoggedIn(true);
-  }
-};
+    // Try to establish socket connection in the background
+    // This should NEVER throw errors that block the user
+    try {
+      console.log('🔌 Attempting socket connection in background...');
+      await socketService.connect();
+      console.log('✅ Socket connected, ID:', socketService.socket?.id);
+      
+      // Try to authenticate - but don't block if it fails
+      try {
+        await socketService.authenticateUser(userData.username);
+        console.log('✅ Socket authentication successful');
+      } catch (authError) {
+        // Authentication failed, but user can still use practice mode
+        console.warn('⚠️ Socket authentication failed (non-blocking):', authError.message);
+        console.log('ℹ️ User can still access practice mode');
+      }
+    } catch (connectionError) {
+      // Connection failed, but user can still use practice mode
+      console.warn('⚠️ Socket connection failed (non-blocking):', connectionError.message);
+      console.log('ℹ️ User can still access practice mode offline');
+    }
+  };
 
   // Handle successful login
   const handleLoginSuccess = async (userData) => {
     try {
       await establishUserSession(userData);
-      console.log('✅ Login complete, connected to game server');
+      console.log('✅ Login complete');
     } catch (error) {
-      console.error('❌ Failed to connect to game server:', error);
-      // Could show an alert here, but for now just log
+      // Never block on connection errors
+      console.warn('⚠️ Connection issues during login (non-blocking):', error.message);
     }
   };
 

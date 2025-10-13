@@ -20,15 +20,9 @@ const PracticeGame = ({ practiceState, onBackToLobby }) => {
   
   const {
     currentWord,
-    selectedLetters,
-    isSubmitting,
     handleLetterPress,
     handleDeleteLetter,
     clearCurrentWord,
-    setIsSubmitting,
-    canSubmit,
-    canDelete,
-    canInteract
   } = useWordInput({ roundStatus: 'active' }, timeRemaining, clearSubmissionDisplay);
 
   const [shuffledOuterLetters, setShuffledOuterLetters] = useState([]);
@@ -48,28 +42,26 @@ const PracticeGame = ({ practiceState, onBackToLobby }) => {
     }
   };
 
-  // Handle word submission
+  // Handle word submission - validation happens here
   const handleSubmitWord = () => {
-    if (!canSubmit || currentWord.length < 4) {
+    // Handle empty/short words
+    if (!currentWord || currentWord.length < 4) {
       showSubmission(currentWord, false, 0, false, 'Word must be at least 4 letters');
       clearCurrentWord();
       return;
     }
 
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-
-    const result = submitWord(currentWord);
-    const wordToShow = currentWord;
+    const wordToSubmit = currentWord;
+    const result = submitWord(wordToSubmit);
+    
+    // Always clear current word after submission
     clearCurrentWord();
     
     if (result.success) {
-      showSubmission(wordToShow, true, result.points, result.isPangram, `+${result.points} points${result.isPangram ? ' 🌟 PANGRAM!' : ''}`);
+      showSubmission(wordToSubmit, true, result.points, result.isPangram, `+${result.points} points${result.isPangram ? ' 🌟 PANGRAM!' : ''}`);
     } else {
-      showSubmission(wordToShow, false, 0, false, result.error);
+      showSubmission(wordToSubmit, false, 0, false, result.error);
     }
-    
-    setIsSubmitting(false);
   };
 
   // Handle ending practice early
@@ -115,30 +107,26 @@ const PracticeGame = ({ practiceState, onBackToLobby }) => {
         scaleAnim={scaleAnim}
       />
 
-      {/* Letter Hexagon and Action Buttons */}
-      <View style={styles.gameArea}>
-        <LetterHexagon
-          centerLetter={currentPuzzle.centerLetter}
-          outerLetters={shuffledOuterLetters.length > 0 ? shuffledOuterLetters : currentPuzzle.outerLetters}
-          onLetterPress={handleLetterPress}
-          canInteract={canInteract}
-        />
-        
-        {/* Action Buttons - moved closer to letters */}
-        <View style={styles.actionButtonsContainer}>
-          <GameActions
-            onDeleteLetter={handleDeleteLetter}
-            onShuffleLetter={handleShuffleLetters}
-            onSubmitWord={handleSubmitWord}
-            canDelete={canDelete}
-            canInteract={canInteract}
-            canSubmit={canSubmit}
-            isSubmitting={isSubmitting}
-          />
-        </View>
-      </View>
+      {/* Letter Hexagon - Always interactive */}
+      <LetterHexagon
+        centerLetter={currentPuzzle.centerLetter}
+        outerLetters={shuffledOuterLetters.length > 0 ? shuffledOuterLetters : currentPuzzle.outerLetters}
+        onLetterPress={handleLetterPress}
+        canInteract={true} // Always allow interaction
+      />
 
-      {/* End Practice Button - Narrower */}
+      {/* Action Buttons - Always enabled, validation happens in handlers */}
+      <GameActions
+        onDeleteLetter={handleDeleteLetter}
+        onShuffleLetter={handleShuffleLetters}
+        onSubmitWord={handleSubmitWord}
+        canDelete={true} // Always enabled
+        canInteract={true} // Always enabled
+        canSubmit={true} // Always enabled
+        isSubmitting={false} // No longer tracking this
+      />
+
+      {/* End Practice Button */}
       <View style={styles.endButtonContainer}>
         <TouchableOpacity
           style={styles.endButton}
@@ -155,11 +143,14 @@ const PracticeGame = ({ practiceState, onBackToLobby }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFC543',
+    paddingTop: 50,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FFC543',
   },
   loadingText: {
     fontSize: 18,
@@ -178,18 +169,10 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     minHeight: 35,
   },
-  gameArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  actionButtonsContainer: {
-    marginTop: 20,
-  },
   endButtonContainer: {
     alignItems: 'center',
     paddingBottom: 20,
+    paddingTop: 10,
   },
   endButton: {
     backgroundColor: '#DC3545',

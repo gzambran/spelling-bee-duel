@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   View,
   Text,
@@ -114,4 +115,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LetterHexagon;
+export default React.memo(LetterHexagon);
