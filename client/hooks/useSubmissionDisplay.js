@@ -56,18 +56,25 @@ export const useSubmissionDisplay = () => {
 
   // Clear the entire submission display (word + notification)
   const clearSubmissionDisplay = useCallback(() => {
-    // Clear timeout
-    if (displayTimeoutRef.current) {
-      clearTimeout(displayTimeoutRef.current);
-      displayTimeoutRef.current = null;
-    }
-
-    // Simply clear the state (animations handled in component)
-    setSubmissionDisplay(null);
-    
-    // Reset animation values for next use
-    fadeAnim.setValue(0);
-    scaleAnim.setValue(1);
+    // Use functional update to check current state without depending on it
+    setSubmissionDisplay(current => {
+      // Early exit if nothing to clear - prevents wasteful operations!
+      if (current === null) {
+        return current; // Return same state = no re-render
+      }
+      
+      // Clear timeout
+      if (displayTimeoutRef.current) {
+        clearTimeout(displayTimeoutRef.current);
+        displayTimeoutRef.current = null;
+      }
+      
+      // Reset animation values for next use
+      fadeAnim.setValue(0);
+      scaleAnim.setValue(1);
+      
+      return null; // Clear the display
+    });
   }, [fadeAnim, scaleAnim]);
 
   // Cleanup on unmount

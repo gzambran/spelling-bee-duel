@@ -3,7 +3,22 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-package-lock.json
+
+# Native builds
+ios/
+android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+*.ipa
+
+# Expo prebuild
+**/ios/Pods/
+**/android/.gradle
+```
 
 # Expo
 .expo/

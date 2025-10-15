@@ -112,7 +112,7 @@ const PracticeGame = ({ practiceState, onBackToLobby }) => {
         centerLetter={currentPuzzle.centerLetter}
         outerLetters={shuffledOuterLetters.length > 0 ? shuffledOuterLetters : currentPuzzle.outerLetters}
         onLetterPress={handleLetterPress}
-        canInteract={true} // Always allow interaction
+        canInteract={true}
       />
 
       {/* Action Buttons - Always enabled, validation happens in handlers */}
@@ -120,10 +120,10 @@ const PracticeGame = ({ practiceState, onBackToLobby }) => {
         onDeleteLetter={handleDeleteLetter}
         onShuffleLetter={handleShuffleLetters}
         onSubmitWord={handleSubmitWord}
-        canDelete={true} // Always enabled
-        canInteract={true} // Always enabled
-        canSubmit={true} // Always enabled
-        isSubmitting={false} // No longer tracking this
+        canDelete={true}
+        canInteract={true}
+        canSubmit={true}
+        isSubmitting={false}
       />
 
       {/* End Practice Button */}
@@ -144,7 +144,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFC543',
-    paddingTop: 50,
   },
   loadingContainer: {
     flex: 1,

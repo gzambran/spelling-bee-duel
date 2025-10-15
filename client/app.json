@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -38,6 +37,9 @@
       "eas": {
         "projectId": "13286147-212d-48d1-a92c-3e53b7527b48"
       }
-    }
+    },
+    "plugins": [
+      "expo-asset"
+    ]
   }
 }
