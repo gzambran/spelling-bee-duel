@@ -3,10 +3,10 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    container_name: spelling-bee-duel
+    container_name: spelling-bee-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3004:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
